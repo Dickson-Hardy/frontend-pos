@@ -35,16 +35,16 @@ import { useToast } from "@/hooks/use-toast"
 interface ReceiptTemplate {
   id: string
   name: string
-  description: string
+  description?: string
   status: 'active' | 'inactive' | 'draft'
-  isDefault: boolean
-  version: number
-  createdAt: string
-  updatedAt: string
-  outletId: string
-  elements: ReceiptElement[]
-  paperConfig: PaperConfiguration
-  printerConfig: PrinterConfiguration
+  isDefault?: boolean
+  version?: number
+  createdAt?: string
+  updatedAt?: string
+  outletId?: string
+  elements?: ReceiptElement[]
+  paperConfig?: PaperConfiguration
+  printerConfig?: PrinterConfiguration
 }
 
 interface ReceiptElement {
@@ -90,58 +90,27 @@ export function ReceiptTemplateManagement() {
   useEffect(() => {
     const loadTemplates = async () => {
       try {
-        // Import API client dynamically
-        const { apiClient } = await import('@/lib/api-unified')
+        // For now, we'll use mock data since the API endpoint doesn't exist yet
+        console.log('Receipt templates API not yet implemented')
         
-        // Try to fetch receipt templates
-        try {
-          const templatesData = await apiClient.receiptTemplates.getAll()
-          setTemplates(templatesData)
-        } catch (apiError) {
-          // If API fails, create some default templates
-          console.warn('Receipt templates API not available, using defaults:', apiError)
-          
-          const defaultTemplates = [
-            {
-              id: 'default-pos',
-              name: 'Default POS Receipt',
-              type: 'pos' as const,
-              status: 'active' as const,
-              content: 'Default receipt template content',
-              createdAt: new Date(),
-              updatedAt: new Date()
-            },
-            {
-              id: 'thermal-small',
-              name: 'Thermal Printer (Small)',
-              type: 'thermal' as const,
-              status: 'active' as const,
-              content: 'Compact thermal receipt template',
-              createdAt: new Date(),
-              updatedAt: new Date()
-            }
-          ]
-          
-          setTemplates(defaultTemplates)
-        }
+        // Initialize with empty templates - will be replaced with real API later
+        setTemplates([])
       } catch (error) {
         console.error('Failed to load receipt templates:', error)
         toast({
           title: "Error",
           description: "Failed to load receipt templates",
-          variant: "destructive"
-    //     })
-    //   }
-    // }
-    // loadTemplates()
+          variant: "destructive",
+        })
+      }
+    }
     
-    // For now, initialize with empty templates
-    setTemplates([])
-  }, [])
+    loadTemplates()
+  }, [toast])
 
   const filteredTemplates = templates.filter(template => {
     const matchesSearch = template.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         template.description.toLowerCase().includes(searchTerm.toLowerCase())
+                         (template.description || '').toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === 'all' || template.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -274,7 +243,7 @@ export function ReceiptTemplateManagement() {
                 className="max-w-sm"
               />
             </div>
-            <Select value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)}>
+            <Select value={statusFilter} onValueChange={(value: 'all' | 'active' | 'inactive' | 'draft') => setStatusFilter(value)}>
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
@@ -299,10 +268,10 @@ export function ReceiptTemplateManagement() {
                   <CardTitle className="text-lg flex items-center gap-2">
                     {template.name}
                     {template.isDefault && (
-                      <CheckCircle className="h-4 w-4 text-green-600" title="Default Template" />
+                      <CheckCircle className="h-4 w-4 text-green-600" />
                     )}
                   </CardTitle>
-                  <CardDescription>{template.description}</CardDescription>
+                  <CardDescription>{template.description || 'No description'}</CardDescription>
                 </div>
                 {getStatusBadge(template.status)}
               </div>
@@ -311,18 +280,18 @@ export function ReceiptTemplateManagement() {
               {/* Template Info */}
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
-                  <span className="text-muted-foreground">Version:</span> {template.version}
+                  <span className="text-muted-foreground">Version:</span> {template.version || 1}
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Paper:</span> {template.paperConfig.width} chars
+                  <span className="text-muted-foreground">Paper:</span> {template.paperConfig?.width || 'N/A'} chars
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="text-muted-foreground">Connection:</span>
-                  {getConnectionIcon(template.printerConfig.connectionType)}
-                  <span className="capitalize">{template.printerConfig.connectionType}</span>
+                  {getConnectionIcon(template.printerConfig?.connectionType || 'usb')}
+                  <span className="capitalize">{template.printerConfig?.connectionType || 'usb'}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Model:</span> {template.printerConfig.model.split(' ')[1]}
+                  <span className="text-muted-foreground">Model:</span> {template.printerConfig?.model?.split(' ')[1] || 'Generic'}
                 </div>
               </div>
 
