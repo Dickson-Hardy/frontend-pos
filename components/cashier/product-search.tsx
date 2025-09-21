@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import { Search, Scan, Package, AlertTriangle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -10,11 +10,22 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { SearchResultsSkeleton } from "@/components/ui/skeleton-loaders"
 import { NoSearchResults, NoProductsFound } from "@/components/ui/empty-states"
 import { showSuccessToast, showErrorToast } from "@/lib/toast-utils"
-import { useProducts, useProductSearch } from "@/hooks/use-products"
 import { useAuth } from "@/contexts/auth-context"
 import { BarcodeScanner } from "./barcode-scanner"
+import { ProductWithPacks } from "./product-with-packs"
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner"
+import { apiClient } from "@/lib/api-client"
 import type { CartItem } from "@/app/cashier/page"
+import type { Product, InventoryItem } from "@/lib/api-unified"
+
+// Extended product type with inventory information
+type ProductWithStock = Product & {
+  currentStock?: number
+  stockQuantity?: number
+  reorderLevel?: number
+  minimumStock?: number
+  inventory?: InventoryItem
+}
 
 interface ProductSearchProps {
   onAddToCart: (product: Omit<CartItem, "quantity">) => void
@@ -23,6 +34,9 @@ interface ProductSearchProps {
 export function ProductSearch({ onAddToCart }: ProductSearchProps) {
   const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
+  const [products, setProducts] = useState<ProductWithStock[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   
   // Barcode scanner functionality
   const { 
@@ -35,17 +49,126 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
     clearLastResult 
   } = useBarcodeScanner()
   
-  // Use the products hook for initial load and search hook for search results
-  const { products: allProducts, loading: allProductsLoading, error: allProductsError } = useProducts(user?.outletId)
-  const { data: searchResults, loading: searchLoading, error: searchError } = useProductSearch(
-    searchTerm.length > 2 ? searchTerm : "", 
-    user?.outletId
-  )
+  // Memoize loadProducts to prevent recreating on every render
+  const loadProductsMemoized = React.useCallback(async () => {
+    if (!user?.outletId) return
+    
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await apiClient.get(`/products?outlet=${user.outletId}&include=packVariants`)
+      
+      console.log('API Response:', response.data)
+      
+      let productsData = []
+      if (response.data?.products) {
+        productsData = response.data.products
+      } else if (Array.isArray(response.data)) {
+        productsData = response.data
+      } else {
+        productsData = []
+      }
+      
+      // Filter out any invalid products and add defaults
+      const validProducts = productsData.filter((product: any) => {
+        if (!product || typeof product !== 'object') {
+          console.warn('Invalid product:', product)
+          return false
+        }
+        // Check for either id or _id field
+        if ((!product.id && !product._id) || !product.name) {
+          console.warn('Product missing required fields:', product)
+          return false
+        }
+        return true
+      }).map((product: any) => ({
+        ...product,
+        id: product.id || product._id, // Ensure consistent id field
+        price: product.price || 0,
+        unit: product.unit || 'unit',
+        category: product.category || 'Unknown'
+      }))
+      
+      console.log('Valid products:', validProducts)
+      setProducts(validProducts)
+    } catch (err) {
+      console.error('Failed to load products:', err)
+      setError('Failed to load products')
+      setProducts([])
+    } finally {
+      setLoading(false)
+    }
+  }, [user?.outletId])
 
-  // Determine which products to show
-  const displayProducts = searchTerm.length > 2 ? searchResults : allProducts
-  const loading = searchTerm.length > 2 ? searchLoading : allProductsLoading
-  const error = searchTerm.length > 2 ? searchError : allProductsError
+  // Memoize searchProducts to prevent recreating on every render
+  const searchProductsMemoized = React.useCallback(async (term: string) => {
+    if (!user?.outletId || term.length < 3) return
+    
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await apiClient.get(`/products/search?q=${encodeURIComponent(term)}&outlet=${user.outletId}&include=packVariants`)
+      
+      console.log('Search API Response:', response.data)
+      
+      let productsData = []
+      if (response.data?.products) {
+        productsData = response.data.products
+      } else if (Array.isArray(response.data)) {
+        productsData = response.data
+      } else {
+        productsData = []
+      }
+      
+      // Filter out any invalid products and add defaults
+      const validProducts = productsData.filter((product: any) => {
+        if (!product || typeof product !== 'object') {
+          console.warn('Invalid search product:', product)
+          return false
+        }
+        // Check for either id or _id field
+        if ((!product.id && !product._id) || !product.name) {
+          console.warn('Search product missing required fields:', product)
+          return false
+        }
+        return true
+      }).map((product: any) => ({
+        ...product,
+        id: product.id || product._id, // Ensure consistent id field
+        price: product.price || 0,
+        unit: product.unit || 'unit',
+        category: product.category || 'Unknown'
+      }))
+      
+      console.log('Valid search products:', validProducts)
+      setProducts(validProducts)
+    } catch (err) {
+      console.error('Failed to search products:', err)
+      setError('Failed to search products')
+      setProducts([])
+    } finally {
+      setLoading(false)
+    }
+  }, [user?.outletId])
+
+  // Load products on mount
+  React.useEffect(() => {
+    loadProductsMemoized()
+  }, [loadProductsMemoized])
+
+  // Handle search with debouncing
+  React.useEffect(() => {
+    if (searchTerm.length >= 3) {
+      const timeoutId = setTimeout(() => {
+        searchProductsMemoized(searchTerm)
+      }, 300)
+      return () => clearTimeout(timeoutId)
+    } else if (searchTerm.length === 0) {
+      loadProductsMemoized()
+    }
+  }, [searchTerm, loadProductsMemoized, searchProductsMemoized])
 
   const handleSearch = (term: string) => {
     setSearchTerm(term)
@@ -53,32 +176,31 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
 
   const isLowStock = (stock: number, reorderLevel: number) => stock <= reorderLevel
 
-  const handleAddToCart = (product: any) => {
-    try {
-      onAddToCart({
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        unit: product.unit,
-        stock: product.currentStock || product.stockQuantity || 0,
-        batchNumber: product.sku || product.barcode,
-        expiryDate: "2025-12-31", // This should come from batch data
-        category: product.category,
-      })
-      showSuccessToast(`${product.name} added to cart`)
-    } catch (error) {
-      showErrorToast("Failed to add product to cart")
-    }
-  }
-
   // Handle barcode scan results
   const handleBarcodeScanned = async (barcode: string) => {
     const result = await handleScan(barcode)
     
     if (result.success && result.product) {
-      // Automatically add scanned product to cart
-      handleAddToCart(result.product)
-      showSuccessToast(`Scanned: ${result.product.name}`)
+      // Create CartItem for scanned product
+      const product = result.product as any
+      const cartItem: Omit<CartItem, "quantity"> = {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        unit: product.unit || 'unit',
+        stock: product.currentStock || product.stockQuantity || 0,
+        batchNumber: product.sku || product.barcode,
+        expiryDate: "2025-12-31",
+        category: product.category,
+        packInfo: {
+          saleType: 'unit',
+          unitQuantity: 1,
+          effectiveUnitCount: 1,
+        }
+      }
+      
+      onAddToCart(cartItem)
+      showSuccessToast(`Scanned: ${product.name}`)
       stopScanning()
     } else {
       showErrorToast(result.error || 'Product not found')
@@ -89,6 +211,13 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
   const handleStartScanning = () => {
     clearLastResult()
     startScanning()
+  }
+
+  // Helper function to get stock information
+  const getStockInfo = (product: ProductWithStock) => {
+    const stock = product.currentStock || product.stockQuantity || product.inventory?.currentStock || 0
+    const reorderLevel = product.reorderLevel || product.minimumStock || product.minStockLevel || product.inventory?.minimumStock || 0
+    return { stock, reorderLevel }
   }
 
   if (loading) {
@@ -170,10 +299,9 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
 
         {/* Product Results */}
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {displayProducts && displayProducts.length > 0 ? (
-            displayProducts.map((product) => {
-              const stock = product.currentStock || product.stockQuantity || 0
-              const reorderLevel = product.reorderLevel || product.minimumStock || 0
+          {products && products.length > 0 ? (
+            products.map((product: ProductWithStock) => {
+              const { stock, reorderLevel } = getStockInfo(product)
               
               return (
                 <div
@@ -197,10 +325,10 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
                     </div>
                     <div className="text-sm text-muted-foreground space-y-1">
                       <p>
-                        Price: Le {product.price.toLocaleString('en-SL')} per {product.unit}
+                        Price: Le {(product.price || 0).toLocaleString('en-SL')} per {product.unit || 'unit'}
                       </p>
                       <p>
-                        Stock: {stock} {product.unit}
+                        Stock: {stock} {product.unit || 'unit'}
                       </p>
                       <p>
                         {product.barcode && `Barcode: ${product.barcode} | `}
@@ -208,13 +336,12 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
                       </p>
                     </div>
                   </div>
-                  <Button 
-                    onClick={() => handleAddToCart(product)} 
-                    disabled={stock === 0} 
-                    className="ml-4"
-                  >
-                    Add to Cart
-                  </Button>
+                  <ProductWithPacks
+                    product={product}
+                    onAddToCart={onAddToCart}
+                    stock={stock}
+                    reorderLevel={reorderLevel}
+                  />
                 </div>
               )
             })

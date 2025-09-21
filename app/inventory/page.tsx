@@ -38,7 +38,7 @@ export default function InventoryPage() {
 
   return (
     <LayoutWrapper role="manager">
-      <Header title="Inventory Management" role="manager" userName="Michael Chen" outletName="Downtown Pharmacy" />
+      <Header title="Inventory Management" role="manager" />
 
       <div className="flex h-[calc(100vh-80px)]">
         <InventorySidebar activeView={activeView} onViewChange={handleViewChange} />

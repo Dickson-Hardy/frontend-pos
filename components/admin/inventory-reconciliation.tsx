@@ -42,23 +42,30 @@ import { useToast } from "@/hooks/use-toast"
 interface Product {
   id: string
   name: string
+  description?: string
+  barcode?: string
+  price: number
+  cost: number
+  unit: string
   category: string
-  brand: string
-  barcode: string
-  batchNumber: string
-  expiryDate: Date
-  unitPrice: number
-  supplier: string
-  location: string
-  minStockLevel: number
-  maxStockLevel: number
+  manufacturer?: string
+  requiresPrescription: boolean
+  isActive: boolean
+  minStockLevel?: number
+  expiryDate?: string
+  outletId: string
+  packVariants?: any[]
+  allowUnitSale: boolean
+  createdAt: Date
+  updatedAt: Date
 }
 
 interface StockRecord {
+  id: string
   productId: string
   product: Product
   systemQuantity: number
-  physicalCount: number
+  physicalCount: number | null
   variance: number
   varianceValue: number
   lastUpdated: Date
@@ -150,119 +157,105 @@ export function InventoryReconciliation() {
     return `Le ${amount.toLocaleString('en-SL')}`
   }, [])
 
-  // Load mock inventory data
+  // Load actual inventory data from API
   const loadInventoryData = useCallback(async () => {
     setIsLoading(true)
     try {
-      // Mock API call - replace with actual API
-      const mockProducts: Product[] = [
-        {
-          id: 'prod_001',
-          name: 'Paracetamol 500mg',
-          category: 'Pain Relief',
-          brand: 'PharmaCorp',
-          barcode: '123456789012',
-          batchNumber: 'PC2024001',
-          expiryDate: new Date('2025-12-31'),
-          unitPrice: 2500, // Le 2,500
-          supplier: 'MedSupply Ltd',
-          location: 'A1-01',
-          minStockLevel: 50,
-          maxStockLevel: 500
-        },
-        {
-          id: 'prod_002',
-          name: 'Amoxicillin 250mg',
-          category: 'Antibiotics',
-          brand: 'BioMed',
-          barcode: '123456789013',
-          batchNumber: 'BM2024002',
-          expiryDate: new Date('2025-06-30'),
-          unitPrice: 5000, // Le 5,000
-          supplier: 'Global Pharma',
-          location: 'A2-05',
-          minStockLevel: 30,
-          maxStockLevel: 200
-        },
-        {
-          id: 'prod_003',
-          name: 'Vitamin D3 1000IU',
-          category: 'Vitamins & Supplements',
-          brand: 'HealthPlus',
-          barcode: '123456789014',
-          batchNumber: 'HP2024003',
-          expiryDate: new Date('2026-03-15'),
-          unitPrice: 15000, // Le 15,000
-          supplier: 'Wellness Corp',
-          location: 'B1-12',
-          minStockLevel: 25,
-          maxStockLevel: 100
-        }
-      ]
-
-      const mockStockRecords: StockRecord[] = mockProducts.map(product => ({
-        productId: product.id,
-        product,
-        systemQuantity: Math.floor(Math.random() * 200) + 50,
-        physicalCount: 0, // To be counted
-        variance: 0,
-        varianceValue: 0,
-        lastUpdated: new Date(),
-        reasons: []
-      }))
-
-      // Add some pre-existing variances for demo
-      mockStockRecords[0].physicalCount = mockStockRecords[0].systemQuantity - 5
-      mockStockRecords[0].variance = -5
-      mockStockRecords[0].varianceValue = -5 * mockStockRecords[0].product.unitPrice
-      mockStockRecords[0].reasons = [{
-        type: 'damaged',
-        quantity: 3,
-        description: 'Damaged packaging during delivery',
-        value: 3 * mockStockRecords[0].product.unitPrice
-      }, {
-        type: 'expired',
-        quantity: 2,
-        description: 'Found expired stock',
-        value: 2 * mockStockRecords[0].product.unitPrice
-      }]
-
-      const newReconciliation: InventoryReconciliation = {
-        id: 'inv_recon_' + Date.now(),
-        date: new Date(),
-        type: 'cycle',
-        status: 'in_progress',
-        outlet: 'Main Pharmacy',
-        initiatedBy: 'Current User',
-        totalProducts: mockStockRecords.length,
-        countedProducts: 1,
-        productsWithVariance: 1,
-        totalVarianceValue: mockStockRecords[0].varianceValue,
-        stockRecords: mockStockRecords,
-        shrinkageAnalysis: {
-          totalShrinkage: Math.abs(mockStockRecords[0].varianceValue),
-          shrinkagePercentage: 0.5,
-          categories: [
-            { category: 'Pain Relief', shrinkage: Math.abs(mockStockRecords[0].varianceValue), percentage: 100 }
-          ],
-          reasons: [
-            { reason: 'Damaged Products', quantity: 3, value: 3 * mockStockRecords[0].product.unitPrice, percentage: 60 },
-            { reason: 'Expired Products', quantity: 2, value: 2 * mockStockRecords[0].product.unitPrice, percentage: 40 }
-          ]
-        },
-        notes: ''
-      }
-
-      setReconciliation(newReconciliation)
+      // Import API client dynamically
+      const { apiClient } = await import('@/lib/api-unified')
       
-      toast({
-        title: "Inventory Data Loaded",
-        description: "Ready to begin inventory reconciliation",
-      })
+      // Fetch actual products from inventory
+      try {
+        const inventoryStats = await apiClient.inventory.getStats()
+        const inventoryItems = await apiClient.inventory.getItems()
+        
+        if (inventoryItems.length === 0) {
+          toast({
+            title: "No Inventory Items",
+            description: "No inventory items found. Please add products to your inventory first.",
+            variant: "destructive",
+          })
+          return
+        }
+        
+        // Create products from inventory items
+        const products: Product[] = inventoryItems.map(item => ({
+          id: item.product.id,
+          name: item.product.name,
+          description: item.product.description,
+          barcode: item.product.barcode || `BAR${item.product.id}`,
+          price: item.product.price,
+          cost: item.product.cost,
+          unit: item.product.unit,
+          category: item.product.category,
+          manufacturer: item.product.manufacturer,
+          requiresPrescription: item.product.requiresPrescription,
+          isActive: item.product.isActive,
+          minStockLevel: item.product.minStockLevel,
+          expiryDate: item.product.expiryDate,
+          outletId: item.product.outletId,
+          allowUnitSale: item.product.allowUnitSale,
+          createdAt: item.product.createdAt,
+          updatedAt: item.product.updatedAt
+        }))
+        
+        // Create stock records based on real inventory data
+        const stockRecords: StockRecord[] = products.map(product => {
+          const inventoryItem = inventoryItems.find(item => item.product.id === product.id)!
+          return {
+            id: `stock_${product.id}`,
+            productId: product.id,
+            product: product,
+            systemQuantity: inventoryItem.currentStock,
+            physicalCount: null, // To be filled during counting
+            variance: 0,
+            varianceValue: 0,
+            lastUpdated: new Date(),
+            reasons: []
+          }
+        })
+        
+        const newReconciliation: InventoryReconciliation = {
+          id: 'inv_recon_' + Date.now(),
+          date: new Date(),
+          type: 'cycle',
+          status: 'in_progress',
+          outlet: 'Main Pharmacy',
+          initiatedBy: 'Current User',
+          totalProducts: stockRecords.length,
+          countedProducts: 0,
+          productsWithVariance: 0,
+          totalVarianceValue: 0,
+          stockRecords: stockRecords,
+          shrinkageAnalysis: {
+            totalShrinkage: 0,
+            shrinkagePercentage: 0,
+            categories: [],
+            reasons: []
+          },
+          notes: ''
+        }
+
+        setReconciliation(newReconciliation)
+        
+        toast({
+          title: "Inventory Data Loaded",
+          description: "Ready to begin inventory reconciliation",
+        })
+      } catch (inventoryError) {
+        console.error('Failed to fetch inventory data:', inventoryError)
+        toast({
+          title: "Error Loading Inventory",
+          description: "Failed to load inventory data. Please check your connection and try again.",
+          variant: "destructive",
+        })
+        throw inventoryError // Re-throw to be caught by outer catch
+      }
     } catch (error) {
+      console.error('Error in loadInventoryData:', error)
       toast({
         title: "Error",
-        description: "Failed to load inventory data",
+        description: "Failed to load inventory data. Please ensure the backend is running and try again.",
         variant: "destructive",
       })
     } finally {
@@ -280,7 +273,7 @@ export function InventoryReconciliation() {
       const updatedRecords = prev.stockRecords.map(record => {
         if (record.productId === productId) {
           const variance = count - record.systemQuantity
-          const varianceValue = variance * record.product.unitPrice
+          const varianceValue = variance * record.product.price
           
           return {
             ...record,
@@ -316,7 +309,7 @@ export function InventoryReconciliation() {
     const product = reconciliation.stockRecords.find(r => r.productId === productId)?.product
     if (!product) return
 
-    const value = quantity * product.unitPrice
+    const value = quantity * product.price
 
     const reason: VarianceReason = {
       type: newVarianceReason as any,
@@ -399,8 +392,7 @@ export function InventoryReconciliation() {
     if (searchTerm) {
       filtered = filtered.filter(record => 
         record.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.product.barcode.includes(searchTerm) ||
-        record.product.batchNumber.toLowerCase().includes(searchTerm.toLowerCase())
+        (record.product.barcode && record.product.barcode.includes(searchTerm))
       )
     }
 
@@ -483,7 +475,7 @@ export function InventoryReconciliation() {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
-          {reconciliation ? (
+          {reconciliation && reconciliation.stockRecords.length > 0 ? (
             <>
               {/* Reconciliation Summary */}
               <Card>
@@ -588,6 +580,20 @@ export function InventoryReconciliation() {
                 </Card>
               </div>
             </>
+          ) : reconciliation && reconciliation.stockRecords.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Inventory Items</h3>
+                <p className="text-muted-foreground mb-4">
+                  No inventory items found for reconciliation. Please add products to your inventory first.
+                </p>
+                <Button onClick={() => window.location.href = '/admin/inventory'} variant="outline">
+                  <Package className="h-4 w-4 mr-2" />
+                  Manage Inventory
+                </Button>
+              </CardContent>
+            </Card>
           ) : (
             <Card>
               <CardContent className="p-8 text-center">
@@ -696,12 +702,12 @@ export function InventoryReconciliation() {
                                 <div>
                                   <h4 className="font-medium">{record.product.name}</h4>
                                   <p className="text-sm text-muted-foreground">
-                                    {record.product.category} • {record.product.brand}
+                                    {record.product.category} • {record.product.manufacturer || 'Unknown'}
                                   </p>
                                   <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-                                    <span>Batch: {record.product.batchNumber}</span>
-                                    <span>Location: {record.product.location}</span>
-                                    <span>Expires: {record.product.expiryDate.toLocaleDateString()}</span>
+                                    <span>Barcode: {record.product.barcode || 'N/A'}</span>
+                                    <span>Unit: {record.product.unit}</span>
+                                    {record.product.expiryDate && <span>Expires: {new Date(record.product.expiryDate).toLocaleDateString()}</span>}
                                   </div>
                                 </div>
                               </div>
@@ -718,7 +724,7 @@ export function InventoryReconciliation() {
                                 <Input
                                   type="number"
                                   min="0"
-                                  value={record.physicalCount}
+                                  value={record.physicalCount ?? ''}
                                   onChange={(e) => updatePhysicalCount(
                                     record.productId, 
                                     parseInt(e.target.value) || 0

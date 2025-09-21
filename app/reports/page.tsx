@@ -38,7 +38,7 @@ export default function ReportsPage() {
 
   return (
     <LayoutWrapper role="manager">
-      <Header title="Financial Reports" role="manager" userName="Michael Chen" outletName="Downtown Pharmacy" />
+      <Header title="Financial Reports" role="manager" />
 
       <div className="flex h-[calc(100vh-80px)]">
         <ReportsSidebar activeView={activeView} onViewChange={handleViewChange} />

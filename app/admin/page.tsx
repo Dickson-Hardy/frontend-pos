@@ -64,7 +64,7 @@ function AdminPage() {
 
   return (
     <LayoutWrapper role="admin">
-      <Header title="Admin Panel" role="admin" userName="Alex Rodriguez" outletName="System Administrator" />
+      <Header title="Admin Panel" role="admin" />
 
       <div className="flex h-[calc(100vh-80px)]">
         <AdminSidebar activeView={activeView} onViewChange={setActiveView} />

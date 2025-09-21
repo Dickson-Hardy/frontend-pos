@@ -32,19 +32,11 @@ export default function CashierDashboard() {
     itemsSold: 156,
   }
 
-  const recentSales = [
-    { id: "TXN001", time: "14:30", amount: 45.99, items: 3, customer: "Walk-in" },
-    { id: "TXN002", time: "14:15", amount: 123.5, items: 7, customer: "John Doe" },
-    { id: "TXN003", time: "13:45", amount: 67.25, items: 4, customer: "Walk-in" },
-    { id: "TXN004", time: "13:30", amount: 89.99, items: 2, customer: "Mary Smith" },
-  ]
+  // Recent sales will be fetched from API
+  const recentSales: any[] = []
 
-  const lowStockItems = [
-    { name: "Paracetamol 500mg", current: 15, minimum: 50, unit: "tablets" },
-    { name: "Amoxicillin 250mg", current: 8, minimum: 30, unit: "capsules" },
-    { name: "Insulin Pen", current: 3, minimum: 10, unit: "units" },
-    { name: "Blood Pressure Monitor", current: 2, minimum: 5, unit: "units" },
-  ]
+  // Low stock items will be fetched from API
+  const lowStockItems: any[] = []
 
   const handleShiftAction = () => {
     if (shiftStatus === "closed") {
@@ -57,7 +49,7 @@ export default function CashierDashboard() {
 
   return (
     <LayoutWrapper role="cashier">
-      <Header title="Cashier Dashboard" role="cashier" userName="Sarah Johnson" outletName="Downtown Pharmacy" />
+      <Header title="Cashier Dashboard" role="cashier" />
 
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">

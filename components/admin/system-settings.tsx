@@ -32,15 +32,18 @@ export function SystemSettings() {
   const handleSaveSettings = async () => {
     setLoading(true)
     try {
-      // TODO: Replace with actual API call
-      // await apiClient.settings.update(settings)
+      // Since there's no settings endpoint, we'll store settings locally
+      // In a real implementation, this would call the backend API
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Store settings in localStorage as fallback
+      localStorage.setItem('systemSettings', JSON.stringify(settings))
+      
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 500))
       
       toast({
         title: "Success",
-        description: "Settings saved successfully",
+        description: "Settings saved successfully (stored locally)",
       })
     } catch (error) {
       console.error('Failed to save settings:', error)

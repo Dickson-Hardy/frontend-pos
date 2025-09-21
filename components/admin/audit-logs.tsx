@@ -44,11 +44,41 @@ export function AuditLogs() {
   const handleExport = async () => {
     setIsExporting(true)
     try {
-      // TODO: Replace with actual export API call
-      // await apiClient.auditLogs.export({ filters, format: 'csv' })
+      // Get current audit logs data
+      const auditData = auditLogs
       
-      // Simulate export
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      if (!auditData || auditData.length === 0) {
+        throw new Error('No audit log data to export')
+      }
+      
+      // Create CSV content
+      const csvHeaders = ['Timestamp', 'User', 'Action', 'Details', 'Outlet', 'Severity', 'IP Address']
+      const csvContent = [
+        csvHeaders.join(','),
+        ...auditData.map(log => [
+          `"${log.timestamp}"`,
+          `"${log.user}"`,
+          `"${log.action}"`,
+          `"${log.details}"`,
+          `"${log.outlet}"`,
+          `"${log.severity}"`,
+          `"${log.ipAddress}"`
+        ].join(','))
+      ].join('\n')
+      
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob)
+        link.setAttribute('href', url)
+        link.setAttribute('download', `audit-logs-${new Date().toISOString().split('T')[0]}.csv`)
+        link.style.visibility = 'hidden'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
       
       toast({
         title: "Success",

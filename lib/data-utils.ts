@@ -1,4 +1,4 @@
-import { Product, Sale, SaleItem, InventoryItem, User } from './api-unified'
+import { Product, Sale, SaleItem, InventoryItem, User, PackVariant, SalePackInfo } from './api-unified'
 
 // Data transformation utilities
 export const dataTransforms = {
@@ -161,6 +161,104 @@ export const dataTransforms = {
       
       return order === 'desc' ? -comparison : comparison
     })
+  },
+
+  // Pack variant utilities
+  getAvailablePacks: (totalUnits: number, packSize: number): number => {
+    return Math.floor(totalUnits / packSize)
+  },
+
+  getLooseUnits: (totalUnits: number, packSize: number): number => {
+    return totalUnits % packSize
+  },
+
+  getPackDisplayText: (variant: PackVariant): string => {
+    const name = variant.name || `${variant.packSize}-pack`
+    return `${name} (${variant.packSize} units) - Le ${variant.packPrice.toLocaleString('en-SL')}`
+  },
+
+  getUnitDisplayText: (product: Product): string => {
+    return `Individual unit - Le ${product.price.toLocaleString('en-SL')}`
+  },
+
+  calculatePackInventory: (totalUnits: number, packVariants: PackVariant[]): {
+    packBreakdown: Array<{ variant: PackVariant; availablePacks: number }>
+    looseUnits: number
+    totalValue: number
+  } => {
+    // Sort pack variants by size (largest first) for optimal packing
+    const sortedVariants = [...packVariants].sort((a, b) => b.packSize - a.packSize)
+    let remainingUnits = totalUnits
+    const packBreakdown: Array<{ variant: PackVariant; availablePacks: number }> = []
+    let totalValue = 0
+
+    // Calculate how many of each pack size can be made
+    for (const variant of sortedVariants) {
+      if (!variant.isActive) continue
+      
+      const availablePacks = Math.floor(remainingUnits / variant.packSize)
+      if (availablePacks > 0) {
+        packBreakdown.push({ variant, availablePacks })
+        const unitsUsed = availablePacks * variant.packSize
+        remainingUnits -= unitsUsed
+        totalValue += availablePacks * variant.packPrice
+      }
+    }
+
+    // Add value of loose units
+    totalValue += remainingUnits * (sortedVariants[0]?.unitPrice || 0)
+
+    return {
+      packBreakdown,
+      looseUnits: remainingUnits,
+      totalValue
+    }
+  },
+
+  createPackSaleInfo: (
+    saleType: 'unit' | 'pack',
+    packVariant?: PackVariant,
+    packQuantity?: number,
+    unitQuantity?: number
+  ): SalePackInfo => {
+    if (saleType === 'pack' && packVariant && packQuantity) {
+      return {
+        saleType: 'pack',
+        packVariantId: packVariant.id,
+        packQuantity,
+        unitQuantity: 0,
+        effectiveUnitCount: packQuantity * packVariant.packSize
+      }
+    } else if (saleType === 'unit' && unitQuantity) {
+      return {
+        saleType: 'unit',
+        packQuantity: 0,
+        unitQuantity,
+        effectiveUnitCount: unitQuantity
+      }
+    }
+    
+    throw new Error('Invalid pack sale info parameters')
+  },
+
+  formatInventoryDisplay: (totalUnits: number, packVariants: PackVariant[]): string => {
+    if (!packVariants || packVariants.length === 0) {
+      return `${totalUnits} units`
+    }
+
+    const breakdown = dataTransforms.calculatePackInventory(totalUnits, packVariants)
+    const parts: string[] = []
+
+    breakdown.packBreakdown.forEach(({ variant, availablePacks }) => {
+      const name = variant.name || `${variant.packSize}-pack`
+      parts.push(`${availablePacks} ${name}${availablePacks !== 1 ? 's' : ''}`)
+    })
+
+    if (breakdown.looseUnits > 0) {
+      parts.push(`${breakdown.looseUnits} unit${breakdown.looseUnits !== 1 ? 's' : ''}`)
+    }
+
+    return parts.length > 0 ? parts.join(' + ') : '0 units'
   },
 }
 

@@ -16,7 +16,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Plus, Search, Upload, Edit, Trash2, RefreshCw, Package, AlertTriangle, DollarSign, Calendar } from "lucide-react"
 import { useProductMutations } from "@/hooks/use-products"
 import { useToast } from "@/hooks/use-toast"
-import { apiClient, Product, CreateProductDto } from "@/lib/api-unified"
+import { apiClient, Product, CreateProductDto, PackVariant } from "@/lib/api-unified"
 
 export function ProductManagement() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -39,6 +39,8 @@ export function ProductManagement() {
     isActive: true,
     expiryDate: '',
     outletId: '',
+    allowUnitSale: true,
+    packVariants: [],
   })
 
   const { createProduct, updateProduct, deleteProduct } = useProductMutations()
@@ -67,6 +69,69 @@ export function ProductManagement() {
     fetchProducts()
   }, [])
 
+  // Pack variant management functions
+  const addPackVariant = () => {
+    const newVariant: PackVariant = {
+      packSize: 1,
+      packPrice: 0,
+      unitPrice: 0,
+      isActive: true,
+      name: '',
+    }
+    setNewProduct(prev => ({
+      ...prev,
+      packVariants: [...(prev.packVariants || []), newVariant]
+    }))
+  }
+
+  const updatePackVariant = (index: number, field: keyof PackVariant, value: any) => {
+    setNewProduct(prev => ({
+      ...prev,
+      packVariants: prev.packVariants?.map((variant, i) => 
+        i === index ? { ...variant, [field]: value } : variant
+      ) || []
+    }))
+  }
+
+  const removePackVariant = (index: number) => {
+    setNewProduct(prev => ({
+      ...prev,
+      packVariants: prev.packVariants?.filter((_, i) => i !== index) || []
+    }))
+  }
+
+  // Similar functions for editing product
+  const addEditPackVariant = () => {
+    if (!editingProduct) return
+    const newVariant: PackVariant = {
+      packSize: 1,
+      packPrice: 0,
+      unitPrice: 0,
+      isActive: true,
+      name: '',
+    }
+    setEditingProduct(prev => prev ? ({
+      ...prev,
+      packVariants: [...(prev.packVariants || []), newVariant]
+    }) : null)
+  }
+
+  const updateEditPackVariant = (index: number, field: keyof PackVariant, value: any) => {
+    setEditingProduct(prev => prev ? ({
+      ...prev,
+      packVariants: prev.packVariants?.map((variant, i) => 
+        i === index ? { ...variant, [field]: value } : variant
+      ) || []
+    }) : null)
+  }
+
+  const removeEditPackVariant = (index: number) => {
+    setEditingProduct(prev => prev ? ({
+      ...prev,
+      packVariants: prev.packVariants?.filter((_, i) => i !== index) || []
+    }) : null)
+  }
+
   // ...existing state and dialog handlers...
 
   const handleAddProduct = async () => {
@@ -87,6 +152,8 @@ export function ProductManagement() {
         isActive: true,
         expiryDate: '',
         outletId: '',
+        allowUnitSale: true,
+        packVariants: [],
       })
       toast({ title: "Success", description: "Product created successfully" })
       fetchProducts()
@@ -246,9 +313,13 @@ export function ProductManagement() {
                       <SelectValue placeholder="Select supplier" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="supplier1">PharmaCorp Ltd</SelectItem>
-                      <SelectItem value="supplier2">MediSupply Inc</SelectItem>
-                      <SelectItem value="supplier3">HealthDist Co</SelectItem>
+                      {/* Populate from suppliers API */}
+                      <SelectItem value="medplus-pharma">MedPlus Pharmaceuticals</SelectItem>
+                      <SelectItem value="wellness-corp">Wellness Corporation</SelectItem>
+                      <SelectItem value="health-first">Health First Supplies</SelectItem>
+                      <SelectItem value="pharma-direct">Pharma Direct Ltd</SelectItem>
+                      <SelectItem value="medical-solutions">Medical Solutions Inc</SelectItem>
+                      <SelectItem value="generic-meds">Generic Medicines Co</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -390,7 +461,112 @@ export function ProductManagement() {
                     />
                   </div>
                 </div>
+                
+                {/* Pack Variants Section */}
                 <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Pack Variants</Label>
+                    <Button type="button" size="sm" variant="outline" onClick={addPackVariant}>
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add Pack
+                    </Button>
+                  </div>
+                  
+                  {newProduct.packVariants?.map((variant, index) => (
+                    <div key={index} className="border rounded-lg p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs text-muted-foreground">Pack Variant {index + 1}</Label>
+                        <Button 
+                          type="button" 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => removePackVariant(index)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor={`pack-name-${index}`} className="text-xs">Name (optional)</Label>
+                          <Input
+                            id={`pack-name-${index}`}
+                            value={variant.name || ''}
+                            onChange={(e) => updatePackVariant(index, 'name', e.target.value)}
+                            placeholder="e.g., 3-pack, dozen"
+                            className="text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor={`pack-size-${index}`} className="text-xs">Pack Size *</Label>
+                          <Input
+                            id={`pack-size-${index}`}
+                            type="number"
+                            min="1"
+                            value={variant.packSize}
+                            onChange={(e) => updatePackVariant(index, 'packSize', parseInt(e.target.value) || 1)}
+                            placeholder="1"
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor={`pack-price-${index}`} className="text-xs">Pack Price (Le) *</Label>
+                          <Input
+                            id={`pack-price-${index}`}
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={variant.packPrice}
+                            onChange={(e) => updatePackVariant(index, 'packPrice', parseFloat(e.target.value) || 0)}
+                            placeholder="0.00"
+                            className="text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor={`unit-price-${index}`} className="text-xs">Unit Price (Le) *</Label>
+                          <Input
+                            id={`unit-price-${index}`}
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={variant.unitPrice}
+                            onChange={(e) => updatePackVariant(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                            placeholder="0.00"
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id={`pack-active-${index}`}
+                          checked={variant.isActive}
+                          onCheckedChange={(checked) => updatePackVariant(index, 'isActive', checked)}
+                        />
+                        <Label htmlFor={`pack-active-${index}`} className="text-xs">Active Pack Variant</Label>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {(!newProduct.packVariants || newProduct.packVariants.length === 0) && (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No pack variants added. Click "Add Pack" to create pack options for this product.
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="allowUnitSale"
+                      checked={newProduct.allowUnitSale}
+                      onCheckedChange={(checked) => setNewProduct({...newProduct, allowUnitSale: checked})}
+                    />
+                    <Label htmlFor="allowUnitSale">Allow Individual Unit Sales</Label>
+                  </div>
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="prescription"
@@ -696,7 +872,112 @@ export function ProductManagement() {
                   />
                 </div>
               </div>
+              
+              {/* Edit Pack Variants Section */}
               <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Pack Variants</Label>
+                  <Button type="button" size="sm" variant="outline" onClick={addEditPackVariant}>
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Pack
+                  </Button>
+                </div>
+                
+                {editingProduct.packVariants?.map((variant, index) => (
+                  <div key={index} className="border rounded-lg p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-muted-foreground">Pack Variant {index + 1}</Label>
+                      <Button 
+                        type="button" 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={() => removeEditPackVariant(index)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor={`edit-pack-name-${index}`} className="text-xs">Name (optional)</Label>
+                        <Input
+                          id={`edit-pack-name-${index}`}
+                          value={variant.name || ''}
+                          onChange={(e) => updateEditPackVariant(index, 'name', e.target.value)}
+                          placeholder="e.g., 3-pack, dozen"
+                          className="text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`edit-pack-size-${index}`} className="text-xs">Pack Size *</Label>
+                        <Input
+                          id={`edit-pack-size-${index}`}
+                          type="number"
+                          min="1"
+                          value={variant.packSize}
+                          onChange={(e) => updateEditPackVariant(index, 'packSize', parseInt(e.target.value) || 1)}
+                          placeholder="1"
+                          className="text-sm"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor={`edit-pack-price-${index}`} className="text-xs">Pack Price (Le) *</Label>
+                        <Input
+                          id={`edit-pack-price-${index}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={variant.packPrice}
+                          onChange={(e) => updateEditPackVariant(index, 'packPrice', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                          className="text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`edit-unit-price-${index}`} className="text-xs">Unit Price (Le) *</Label>
+                        <Input
+                          id={`edit-unit-price-${index}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={variant.unitPrice}
+                          onChange={(e) => updateEditPackVariant(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                          className="text-sm"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id={`edit-pack-active-${index}`}
+                        checked={variant.isActive}
+                        onCheckedChange={(checked) => updateEditPackVariant(index, 'isActive', checked)}
+                      />
+                      <Label htmlFor={`edit-pack-active-${index}`} className="text-xs">Active Pack Variant</Label>
+                    </div>
+                  </div>
+                ))}
+                
+                {(!editingProduct.packVariants || editingProduct.packVariants.length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No pack variants added. Click "Add Pack" to create pack options for this product.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="editAllowUnitSale"
+                    checked={(editingProduct as any).allowUnitSale !== false}
+                    onCheckedChange={(checked) => setEditingProduct({...editingProduct, allowUnitSale: checked})}
+                  />
+                  <Label htmlFor="editAllowUnitSale">Allow Individual Unit Sales</Label>
+                </div>
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="editPrescription"

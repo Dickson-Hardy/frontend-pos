@@ -103,11 +103,15 @@ export function TokenSync() {
               
               if (currentToken) {
                 headers.set('x-auth-token', currentToken)
-                console.log('📡 [TOKEN-SYNC] Adding token to request headers', {
-                  url: typeof input === 'string' ? input : input.toString(),
-                  hasToken: true,
-                  tokenLength: currentToken.length
-                })
+                // Only log for non-health checks to reduce noise
+                const url = typeof input === 'string' ? input : input.toString()
+                if (!url.includes('/health') && process.env.NODE_ENV === 'development') {
+                  console.log('📡 [TOKEN-SYNC] Adding token to request headers', {
+                    url,
+                    hasToken: true,
+                    tokenLength: currentToken.length
+                  })
+                }
               }
               
               return originalFetch(input, {

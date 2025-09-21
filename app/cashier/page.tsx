@@ -12,6 +12,7 @@ import { QuickActions } from "@/components/cashier/quick-actions"
 import { CustomerPanel } from "@/components/cashier/customer-panel"
 import { DiscountPanel } from "@/components/cashier/discount-panel"
 import { MobileCashierPage } from "@/components/cashier/mobile-pos-page"
+import { PackVariant, SalePackInfo } from "@/lib/api-unified"
 
 export interface CartItem {
   id: string
@@ -24,6 +25,8 @@ export interface CartItem {
   batchNumber?: string
   expiryDate?: string
   discount?: number
+  packInfo?: SalePackInfo // Track if this is a pack sale
+  packVariant?: PackVariant // The pack variant if applicable
 }
 
 interface Customer {
@@ -136,7 +139,42 @@ function CashierContent() {
         outletName={user?.outlet?.name || "Pharmacy"} 
       />
 
-      <div className="flex h-[calc(100vh-80px)]">
+      {/* Mobile Layout - Single column with tabs */}
+      <div className="block lg:hidden h-[calc(100vh-80px)]">
+        <div className="p-2 space-y-2">
+          <ProductSearch onAddToCart={addToCart} />
+          <div className="grid grid-cols-1 gap-2">
+            <CustomerPanel 
+              selectedCustomer={selectedCustomer}
+              onCustomerSelect={setSelectedCustomer}
+            />
+            {!showPayment ? (
+              <ShoppingCart
+                items={cartItems}
+                onUpdateQuantity={updateQuantity}
+                onRemoveItem={removeFromCart}
+                onClearCart={clearCart}
+                onProceedToPayment={() => setShowPayment(true)}
+                subtotal={subtotal}
+                totalDiscount={totalDiscount}
+                total={total}
+              />
+            ) : (
+              <PaymentPanel
+                items={cartItems}
+                total={total}
+                customer={selectedCustomer}
+                discounts={appliedDiscounts}
+                onBack={() => setShowPayment(false)}
+                onPaymentComplete={clearCart}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Layout - Three column layout */}
+      <div className="hidden lg:flex h-[calc(100vh-80px)]">
         {/* Left Panel - Product Search & Quick Actions */}
         <div className="flex-1 p-4 space-y-4 overflow-y-auto">
           <ProductSearch onAddToCart={addToCart} />

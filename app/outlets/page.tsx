@@ -32,47 +32,13 @@ interface Outlet {
 }
 
 export default function OutletsPage() {
-  const [outlets, setOutlets] = useState<Outlet[]>([
-    {
-      id: "1",
-      name: "Downtown Pharmacy",
-      address: "123 Main St, Downtown",
-      phone: "+1 (555) 123-4567",
-      manager: "Sarah Johnson",
-      staff: 8,
-      status: "active",
-      revenue: 125000,
-      transactions: 2450,
-    },
-    {
-      id: "2",
-      name: "Westside Medical",
-      address: "456 West Ave, Westside",
-      phone: "+1 (555) 234-5678",
-      manager: "Mike Chen",
-      staff: 6,
-      status: "active",
-      revenue: 98000,
-      transactions: 1890,
-    },
-    {
-      id: "3",
-      name: "North Branch",
-      address: "789 North Rd, Northside",
-      phone: "+1 (555) 345-6789",
-      manager: "Lisa Rodriguez",
-      staff: 5,
-      status: "inactive",
-      revenue: 67000,
-      transactions: 1230,
-    },
-  ])
+  const [outlets, setOutlets] = useState<Outlet[]>([])
 
   const [isAddingOutlet, setIsAddingOutlet] = useState(false)
 
   return (
     <LayoutWrapper role="admin">
-      <Header title="Outlet Management" role="admin" userName="Admin User" />
+      <Header title="Outlet Management" role="admin" />
 
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">

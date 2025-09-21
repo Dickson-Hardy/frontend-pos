@@ -238,21 +238,27 @@ export function CashReconciliation() {
   const loadSalesData = useCallback(async () => {
     setIsLoading(true)
     try {
-      // TODO: Replace with actual API call to fetch sales data
-      // const salesData = await fetchSalesData(selectedShift, selectedOutlet, startDate, endDate)
+      // Fetch actual sales data from API
+      const { apiClient } = await import('@/lib/api-unified')
       
-      // For now, show empty state until API is implemented
+      // Get sales summary for the selected period
+      const salesData = await apiClient.sales.getDailySummary()
+      
+      // You could also filter by outlet and date range if the API supports it
+      // const salesData = await apiClient.sales.getByDateRange(startDate, endDate, selectedOutlet)
+      
       setHasLoadedSalesData(true)
       setActiveTab('count')
       
       toast({
         title: "Sales Data Loaded",
-        description: "Daily sales summary loaded successfully. Begin cash counting.",
+        description: `Sales summary loaded: $${salesData.totalSales.toFixed(2)} from ${salesData.transactionCount} transactions`,
       })
     } catch (error) {
+      console.error('Failed to load sales data:', error)
       toast({
         title: "Error",
-        description: "Failed to load sales data",
+        description: "Failed to load sales data. Please try again.",
         variant: "destructive",
       })
     } finally {

@@ -44,49 +44,104 @@ export function RealTimeProvider({ children }: RealTimeProviderProps) {
     if (!isAuthenticated || !token) return
 
     try {
-      // In a real implementation, you would connect to a WebSocket server
-      // For now, we'll simulate real-time updates with periodic checks
-      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001'
-      
-      // Simulate WebSocket connection
+      // Instead of WebSocket (which isn't implemented in backend),
+      // implement intelligent polling of backend APIs for real-time updates
       setIsConnected(true)
       reconnectAttempts.current = 0
 
-      // TODO: Replace with actual WebSocket connection for production
-      const interval = setInterval(() => {
-        // Simulate random inventory updates
-        if (Math.random() > 0.8) {
-          const update: RealTimeUpdate = {
-            type: 'inventory_update',
-            data: {
-              productId: `product-${Math.floor(Math.random() * 100)}`,
-              newQuantity: Math.floor(Math.random() * 100),
-              change: Math.floor(Math.random() * 10) - 5,
-            },
-            timestamp: new Date(),
-          }
-          
-          setLastUpdate(update)
-          subscribersRef.current.forEach(callback => callback(update))
-        }
+      let lastInventoryCheck = Date.now()
+      let lastSalesCheck = Date.now()
+      let previousInventoryData: any = null
+      let previousSalesData: any = null
 
-        // Simulate low stock alerts
-        if (Math.random() > 0.95) {
-          const update: RealTimeUpdate = {
-            type: 'low_stock_alert',
-            data: {
-              productId: `product-${Math.floor(Math.random() * 100)}`,
-              productName: `Product ${Math.floor(Math.random() * 100)}`,
-              currentStock: Math.floor(Math.random() * 10),
-              minimumStock: 20,
-            },
-            timestamp: new Date(),
+      const pollForUpdates = async () => {
+        try {
+          // Import API client dynamically to avoid circular dependencies
+          const { apiClient } = await import('@/lib/api-unified')
+          
+          // Check for inventory updates every 10 seconds
+          if (Date.now() - lastInventoryCheck > 10000) {
+            try {
+              const currentInventoryStats = await apiClient.inventory.getStats()
+              
+              if (previousInventoryData) {
+                // Check for low stock changes
+                if (currentInventoryStats.lowStockCount > previousInventoryData.lowStockCount) {
+                  const update: RealTimeUpdate = {
+                    type: 'low_stock_alert',
+                    data: {
+                      message: 'New low stock items detected',
+                      lowStockCount: currentInventoryStats.lowStockCount,
+                      previousCount: previousInventoryData.lowStockCount,
+                    },
+                    timestamp: new Date(),
+                  }
+                  setLastUpdate(update)
+                  subscribersRef.current.forEach(callback => callback(update))
+                }
+                
+                // Check for inventory value changes
+                if (Math.abs(currentInventoryStats.totalValue - previousInventoryData.totalValue) > 100) {
+                  const update: RealTimeUpdate = {
+                    type: 'inventory_update',
+                    data: {
+                      message: 'Inventory value changed significantly',
+                      newValue: currentInventoryStats.totalValue,
+                      previousValue: previousInventoryData.totalValue,
+                      change: currentInventoryStats.totalValue - previousInventoryData.totalValue,
+                    },
+                    timestamp: new Date(),
+                  }
+                  setLastUpdate(update)
+                  subscribersRef.current.forEach(callback => callback(update))
+                }
+              }
+              
+              previousInventoryData = currentInventoryStats
+              lastInventoryCheck = Date.now()
+            } catch (error) {
+              console.warn('Failed to check inventory updates:', error)
+            }
           }
           
-          setLastUpdate(update)
-          subscribersRef.current.forEach(callback => callback(update))
+          // Check for sales updates every 15 seconds
+          if (Date.now() - lastSalesCheck > 15000) {
+            try {
+              const currentSalesData = await apiClient.sales.getDailySummary()
+              
+              if (previousSalesData) {
+                // Check for new sales
+                if (currentSalesData.transactionCount > previousSalesData.transactionCount) {
+                  const update: RealTimeUpdate = {
+                    type: 'sale_created',
+                    data: {
+                      message: 'New sale transaction completed',
+                      newTransactionCount: currentSalesData.transactionCount,
+                      previousTransactionCount: previousSalesData.transactionCount,
+                      totalSales: currentSalesData.totalSales,
+                    },
+                    timestamp: new Date(),
+                  }
+                  setLastUpdate(update)
+                  subscribersRef.current.forEach(callback => callback(update))
+                }
+              }
+              
+              previousSalesData = currentSalesData
+              lastSalesCheck = Date.now()
+            } catch (error) {
+              console.warn('Failed to check sales updates:', error)
+            }
+          }
+        } catch (error) {
+          console.error('Error polling for updates:', error)
+          // Don't disconnect on individual poll errors
         }
-      }, 5000) // Check every 5 seconds
+      }
+
+      // Start polling immediately and then every 5 seconds
+      pollForUpdates()
+      const interval = setInterval(pollForUpdates, 5000)
 
       return () => {
         clearInterval(interval)

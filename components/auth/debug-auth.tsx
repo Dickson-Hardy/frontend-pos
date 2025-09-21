@@ -6,6 +6,8 @@ import { useAuthActions } from '@/hooks/use-auth-actions'
 import { apiClient } from '@/lib/api-unified'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react'
@@ -17,6 +19,8 @@ export function AuthDebug() {
   const [authEndpointStatus, setAuthEndpointStatus] = useState<'checking' | 'accessible' | 'error'>('checking')
   const [localStorageData, setLocalStorageData] = useState<any>({})
   const [networkInfo, setNetworkInfo] = useState<any>({})
+  const [testEmail, setTestEmail] = useState('admin@pharmpos.com')
+  const [testPassword, setTestPassword] = useState('admin@2025')
 
   useEffect(() => {
     // Check API status
@@ -92,16 +96,18 @@ export function AuthDebug() {
   const testLogin = async () => {
     try {
       console.log('Testing login with provided credentials...')
-      // Note: In production, never hardcode credentials. This is a dev-only utility.
-      const email = 'admin@pharmpos.com' // TODO: replace with input
-      const password = 'admin@2025' // TODO: replace with input
+      
+      if (!testEmail || !testPassword) {
+        alert('Please enter both email and password')
+        return
+      }
 
       const response = await fetch('http://localhost:3001/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: testEmail, password: testPassword }),
         signal: AbortSignal.timeout(10000),
       })
 
@@ -239,6 +245,33 @@ export function AuthDebug() {
           <div className="text-sm space-y-1">
             <div>Online: <Badge variant={networkInfo.online ? 'default' : 'destructive'}>{networkInfo.online?.toString()}</Badge></div>
             <div>Language: {networkInfo.language}</div>
+          </div>
+        </div>
+
+        {/* Test Credentials */}
+        <div className="space-y-2">
+          <h4 className="font-medium">Test Credentials</h4>
+          <div className="grid grid-cols-1 gap-2">
+            <div>
+              <Label htmlFor="test-email">Email</Label>
+              <Input
+                id="test-email"
+                type="email"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                placeholder="Enter test email"
+              />
+            </div>
+            <div>
+              <Label htmlFor="test-password">Password</Label>
+              <Input
+                id="test-password"
+                type="password"
+                value={testPassword}
+                onChange={(e) => setTestPassword(e.target.value)}
+                placeholder="Enter test password"
+              />
+            </div>
           </div>
         </div>
 

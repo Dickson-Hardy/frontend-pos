@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import { Search, Scan, Package, Grid3x3, Plus } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -8,10 +8,19 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { showSuccessToast, showErrorToast } from "@/lib/toast-utils"
-import { useProducts, useProductSearch } from "@/hooks/use-products"
 import { useAuth } from "@/contexts/auth-context"
 import { BarcodeScanner } from "./barcode-scanner"
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner"
+import { apiClient } from "@/lib/api-client"
+import type { Product } from "@/lib/api-unified"
+
+// Extended product type with inventory information
+type ProductWithStock = Product & {
+  currentStock?: number
+  stockQuantity?: number
+  reorderLevel?: number
+  minimumStock?: number
+}
 
 interface CartItem {
   id: string
@@ -34,6 +43,9 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
   const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid')
+  const [products, setProducts] = useState<ProductWithStock[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   
   // Barcode scanner functionality
   const { 
@@ -44,17 +56,127 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
     handleScan,
     clearLastResult 
   } = useBarcodeScanner()
-  
-  // Use the products hook for initial load and search hook for search results
-  const { data: allProducts, loading: allProductsLoading } = useProducts(user?.outletId)
-  const { data: searchResults, loading: searchLoading } = useProductSearch(
-    searchTerm.length > 2 ? searchTerm : "", 
-    user?.outletId
-  )
 
-  // Calculate derived values
-  const displayProducts = searchTerm.length > 2 ? searchResults : allProducts?.slice(0, 20) // Limit to 20 on mobile
-  const loading = searchTerm.length > 2 ? searchLoading : allProductsLoading
+  // Load products using direct API call - similar to desktop component
+  const loadProducts = React.useCallback(async () => {
+    if (!user?.outletId) return
+    
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await apiClient.get(`/products?outlet=${user.outletId}&include=packVariants`)
+      
+      console.log('Mobile API Response:', response.data)
+      
+      let productsData = []
+      if (response.data?.products) {
+        productsData = response.data.products
+      } else if (Array.isArray(response.data)) {
+        productsData = response.data
+      } else {
+        productsData = []
+      }
+      
+      // Filter out any invalid products and add defaults
+      const validProducts = productsData.filter((product: any) => {
+        if (!product || typeof product !== 'object') {
+          console.warn('Invalid mobile product:', product)
+          return false
+        }
+        // Check for either id or _id field
+        if ((!product.id && !product._id) || !product.name) {
+          console.warn('Mobile product missing required fields:', product)
+          return false
+        }
+        return true
+      }).map((product: any) => ({
+        ...product,
+        id: product.id || product._id, // Ensure consistent id field
+        price: product.price || 0,
+        unit: product.unit || 'unit',
+        category: product.category || 'Unknown'
+      }))
+      
+      console.log('Valid mobile products:', validProducts)
+      setProducts(validProducts)
+    } catch (err) {
+      console.error('Failed to load mobile products:', err)
+      setError('Failed to load products')
+      setProducts([])
+    } finally {
+      setLoading(false)
+    }
+  }, [user?.outletId])
+
+  // Search products
+  const searchProducts = React.useCallback(async (term: string) => {
+    if (!user?.outletId || term.length < 3) return
+    
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await apiClient.get(`/products/search?q=${encodeURIComponent(term)}&outlet=${user.outletId}&include=packVariants`)
+      
+      console.log('Mobile Search API Response:', response.data)
+      
+      let productsData = []
+      if (response.data?.products) {
+        productsData = response.data.products
+      } else if (Array.isArray(response.data)) {
+        productsData = response.data
+      } else {
+        productsData = []
+      }
+      
+      // Filter out any invalid products and add defaults
+      const validProducts = productsData.filter((product: any) => {
+        if (!product || typeof product !== 'object') {
+          console.warn('Invalid mobile search product:', product)
+          return false
+        }
+        // Check for either id or _id field
+        if ((!product.id && !product._id) || !product.name) {
+          console.warn('Mobile search product missing required fields:', product)
+          return false
+        }
+        return true
+      }).map((product: any) => ({
+        ...product,
+        id: product.id || product._id, // Ensure consistent id field
+        price: product.price || 0,
+        unit: product.unit || 'unit',
+        category: product.category || 'Unknown'
+      }))
+      
+      console.log('Valid mobile search products:', validProducts)
+      setProducts(validProducts)
+    } catch (err) {
+      console.error('Failed to search mobile products:', err)
+      setError('Failed to search products')
+      setProducts([])
+    } finally {
+      setLoading(false)
+    }
+  }, [user?.outletId])
+
+  // Load products on mount
+  React.useEffect(() => {
+    loadProducts()
+  }, [loadProducts])
+
+  // Handle search with debouncing
+  React.useEffect(() => {
+    if (searchTerm.length >= 3) {
+      const timeoutId = setTimeout(() => {
+        searchProducts(searchTerm)
+      }, 300)
+      return () => clearTimeout(timeoutId)
+    } else if (searchTerm.length === 0) {
+      loadProducts()
+    }
+  }, [searchTerm, searchProducts, loadProducts])
 
   const handleAddToCart = (product: any) => {
     try {
@@ -111,6 +233,9 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
     )
   }
 
+  // Calculate displayProducts - limit to 20 on mobile
+  const displayProducts = products?.slice(0, 20) || []
+
   return (
     <div className="space-y-4">
       {/* Mobile Search Header */}
@@ -147,7 +272,7 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-2 gap-3">
           {displayProducts && displayProducts.length > 0 ? (
-            displayProducts.map((product: any) => {
+            displayProducts.map((product: ProductWithStock) => {
               const stock = product.currentStock || product.stockQuantity || 0
               const isOutOfStock = stock === 0
               const isLowStock = stock > 0 && stock <= (product.reorderLevel || 10)
@@ -213,7 +338,7 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
       ) : (
         <div className="space-y-2">
           {displayProducts && displayProducts.length > 0 ? (
-            displayProducts.map((product: any) => {
+            displayProducts.map((product: ProductWithStock) => {
               const stock = product.currentStock || product.stockQuantity || 0
               const isOutOfStock = stock === 0
               const isLowStock = stock > 0 && stock <= (product.reorderLevel || 10)

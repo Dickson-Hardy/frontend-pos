@@ -36,48 +36,19 @@ interface Product {
 }
 
 export default function ProductManagementPage() {
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: "1",
-      name: "Paracetamol 500mg",
-      category: "Pain Relief",
-      supplier: "PharmaCorp Ltd",
-      currentStock: 150,
-      unit: "tablets",
-      costPrice: 0.25,
-      sellingPrice: 0.45,
-      batchNumber: "PC2024001",
-      expiryDate: "2025-12-31",
-      status: "active",
-    },
-    {
-      id: "2",
-      name: "Amoxicillin 250mg",
-      category: "Antibiotics",
-      supplier: "MediSupply Inc",
-      currentStock: 75,
-      unit: "capsules",
-      costPrice: 0.8,
-      sellingPrice: 1.2,
-      batchNumber: "MS2024002",
-      expiryDate: "2025-08-15",
-      status: "active",
-    },
-  ])
+  const [products, setProducts] = useState<Product[]>([])
 
   const [isAddingProduct, setIsAddingProduct] = useState(false)
   const [isUploadingInvoice, setIsUploadingInvoice] = useState(false)
   const [adjustmentReason, setAdjustmentReason] = useState("")
 
-  const suppliers = [
-    { id: "1", name: "PharmaCorp Ltd", contact: "John Smith", phone: "+1-555-0101" },
-    { id: "2", name: "MediSupply Inc", contact: "Sarah Wilson", phone: "+1-555-0102" },
-    { id: "3", name: "HealthDistributors", contact: "Mike Johnson", phone: "+1-555-0103" },
+  const suppliers: any[] = [
+    // TODO: Fetch suppliers from API
   ]
 
   return (
     <LayoutWrapper role="manager">
-      <Header title="Product Management" role="manager" userName="Mike Chen" outletName="Downtown Pharmacy" />
+      <Header title="Product Management" role="manager" />
 
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
