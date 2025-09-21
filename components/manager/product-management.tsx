@@ -17,8 +17,10 @@ import { Plus, Search, Upload, Edit, Trash2, RefreshCw, Package, AlertTriangle, 
 import { useProductMutations } from "@/hooks/use-products"
 import { useToast } from "@/hooks/use-toast"
 import { apiClient, Product, CreateProductDto, PackVariant } from "@/lib/api-unified"
+import { useAuth } from "@/contexts/auth-context"
 
 export function ProductManagement() {
+  const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -55,7 +57,7 @@ export function ProductManagement() {
     setLoading(true)
     setError(null)
     try {
-      const items = await apiClient.products.getAll()
+      const items = await apiClient.products.getAll(user?.outletId)
       setProducts(items)
     } catch (e) {
       console.error('Failed to fetch products', e)
@@ -67,7 +69,7 @@ export function ProductManagement() {
 
   useEffect(() => {
     fetchProducts()
-  }, [])
+  }, [user?.outletId])
 
   // Pack variant management functions
   const addPackVariant = () => {
@@ -347,7 +349,7 @@ export function ProductManagement() {
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4 max-h-[400px] overflow-y-auto">
-                <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Product Name *</Label>
                     <Input
@@ -358,7 +360,7 @@ export function ProductManagement() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="barcode">Barcode</Label>
+                <Label htmlFor="barcode">Barcode</Label>
                     <Input
                       id="barcode"
                       value={newProduct.barcode}
@@ -367,6 +369,10 @@ export function ProductManagement() {
                     />
                   </div>
                 </div>
+            <div className="space-y-2">
+              <Label htmlFor="outlet">Outlet *</Label>
+              <Input id="outlet" value={newProduct.outletId || user?.outletId || ''} onChange={(e) => setNewProduct({ ...newProduct, outletId: e.target.value })} placeholder="Outlet ID" />
+            </div>
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea

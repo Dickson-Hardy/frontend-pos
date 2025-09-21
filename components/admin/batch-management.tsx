@@ -106,6 +106,7 @@ export function BatchManagement() {
       } else {
         await apiClient.inventory.createBatch({
           ...form,
+          outletId: form.outletId || user?.outletId || '',
         })
       }
       setIsDialogOpen(false)

@@ -33,8 +33,8 @@ export function InventoryManagement() {
       setLoading(true)
       setError(null)
       const [itemsData, statsData] = await Promise.all([
-        apiClient.inventory.getItems(),
-        apiClient.inventory.getStats(),
+        apiClient.inventory.getItems(user?.outletId),
+        apiClient.inventory.getStats(user?.outletId),
       ])
       setInventoryItems(itemsData)
       setStats(statsData)
@@ -228,7 +228,7 @@ export function InventoryManagement() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Inventory Adjustments</CardTitle>
+          <CardTitle>Inventory Adjustments {user?.outlet?.name ? `- ${user.outlet.name}` : ''}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
