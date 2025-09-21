@@ -13,7 +13,6 @@ import { ErrorBoundary } from "@/components/ui/error-boundary"
 import { NetworkStatus } from "@/components/ui/error-message"
 import { Toaster } from "@/components/ui/sonner"
 import { TokenSync } from "@/components/auth/token-sync"
-import { DebugMiddleware } from "@/components/auth/debug-middleware"
 import { SessionExpiryWarning } from "@/components/auth/session-expiry-warning"
 import { AuthRecovery } from "@/components/auth/auth-recovery"
 import "./globals.css"
@@ -79,7 +78,6 @@ export default function RootLayout({
               <AuthProvider>
                 <TokenSync />
                 <AuthRecovery />
-                <DebugMiddleware />
                 <SessionExpiryWarning />
                 <RealTimeProvider>
                   <NetworkStatus />

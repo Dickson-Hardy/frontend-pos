@@ -12,30 +12,53 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { ErrorMessage } from "@/components/ui/error-message"
 import { useSaleMutations } from "@/hooks/use-sales"
 import { useAuth } from "@/contexts/auth-context"
+import { receiptGenerator, type ReceiptData, type ReceiptTemplate, type ReceiptElement } from "@/lib/receipt-generator"
+import { useThermalPrinter } from "@/hooks/use-thermal-printer"
 import type { CartItem } from "@/app/cashier/page"
 import type { PaymentMethod } from "@/lib/api-unified"
 
 interface PaymentPanelProps {
   items: CartItem[]
   total: number
+  customer?: Customer | null
+  discounts?: Discount[]
   onBack: () => void
   onPaymentComplete: () => void
 }
 
-export function PaymentPanel({ items, total, onBack, onPaymentComplete }: PaymentPanelProps) {
+interface Customer {
+  id: string
+  name: string
+  phone?: string
+  email?: string
+  loyaltyNumber?: string
+  discountLevel?: number
+}
+
+interface Discount {
+  id: string
+  type: 'percentage' | 'fixed' | 'loyalty' | 'coupon'
+  value: number
+  label: string
+  code?: string
+}
+
+export function PaymentPanel({ items, total, customer, discounts, onBack, onPaymentComplete }: PaymentPanelProps) {
   const { user } = useAuth()
   const { createSale } = useSaleMutations()
+  const { printReceipt, isConnected: printerConnected } = useThermalPrinter()
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash")
   const [cashReceived, setCashReceived] = useState("")
   const [paymentSuccess, setPaymentSuccess] = useState(false)
   const [saleId, setSaleId] = useState<string>("")
+  const [receiptPrinted, setReceiptPrinted] = useState(false)
 
   const cashAmount = Number.parseFloat(cashReceived) || 0
   const change = cashAmount - total
 
   const handlePayment = async () => {
-    if (!user?.outletId) {
-      console.error("No outlet ID available")
+    if (!user?.outletId || !user?.outlet) {
+      console.error("No outlet information available")
       return
     }
 
@@ -58,6 +81,80 @@ export function PaymentPanel({ items, total, onBack, onPaymentComplete }: Paymen
       const sale = await createSale.mutate(saleData)
       setSaleId(sale.id)
       setPaymentSuccess(true)
+
+      // Generate and print receipt
+      try {
+        const receiptData: ReceiptData = {
+          outlet: {
+            name: user.outlet.name,
+            address: user.outlet.address,
+            phone: user.outlet.phone,
+            email: user.outlet.email || '',
+            licenseNumber: user.outlet.licenseNumber,
+          },
+          transaction: {
+            id: sale.id,
+            date: new Date(),
+            cashier: `${user.firstName} ${user.lastName}`,
+            customer: customer ? {
+              name: customer.name,
+              phone: customer.phone,
+            } : undefined,
+          },
+          items: items.map(item => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.price * item.quantity,
+            unit: item.unit,
+            barcode: item.batchNumber,
+          })),
+          totals: {
+            subtotal: total,
+            tax: 0,
+            discount: 0,
+            total: total,
+          },
+          payment: {
+            method: paymentMethod,
+            amount: paymentMethod === 'cash' ? cashAmount : total,
+            change: paymentMethod === 'cash' ? Math.max(0, cashAmount - total) : 0,
+          },
+        }
+
+        if (printerConnected) {
+          // Create a simple default template
+          const defaultTemplate = {
+            id: 'default',
+            name: 'Default Receipt',
+            elements: [
+              { type: 'text', content: '{{outlet.name}}', alignment: 'center', fontSize: 'large', fontStyle: 'bold', bold: true, underline: false, height: 1, marginTop: 0, marginBottom: 1, properties: {} },
+              { type: 'text', content: '{{outlet.address}}', alignment: 'center', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 0, properties: {} },
+              { type: 'text', content: '{{outlet.phone}}', alignment: 'center', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 1, properties: {} },
+              { type: 'line', content: '', alignment: 'left', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 1, properties: {} },
+              { type: 'text', content: 'Receipt #{{transaction.id}}', alignment: 'left', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 0, properties: {} },
+              { type: 'text', content: '{{transaction.date}}', alignment: 'left', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 0, properties: {} },
+              { type: 'text', content: 'Cashier: {{transaction.cashier}}', alignment: 'left', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 1, properties: {} },
+              { type: 'line', content: '', alignment: 'left', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 1, properties: {} },
+              { type: 'items_table', content: '', alignment: 'left', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 1, properties: {} },
+              { type: 'line', content: '', alignment: 'left', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 0, properties: {} },
+              { type: 'totals', content: '', alignment: 'right', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 1, properties: {} },
+              { type: 'text', content: 'Payment: {{payment.method}}', alignment: 'left', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 0, properties: {} },
+              { type: 'text', content: 'Change: Le {{payment.change}}', alignment: 'left', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 2, properties: {} },
+              { type: 'text', content: 'Thank you for your business!', alignment: 'center', fontSize: 'medium', fontStyle: 'normal', bold: false, underline: false, height: 1, marginTop: 0, marginBottom: 0, properties: {} },
+            ] as ReceiptElement[],
+            paperConfig: { width: 32, physicalWidth: 58 },
+            printerConfig: { type: 'thermal', model: 'generic' }
+          } as ReceiptTemplate
+          
+          await printReceipt(defaultTemplate, receiptData)
+          setReceiptPrinted(true)
+        }
+      } catch (printError) {
+        console.error("Failed to print receipt:", printError)
+        // Don't fail the transaction if printing fails
+      }
 
       // Auto-complete after showing success message
       setTimeout(() => {
@@ -95,6 +192,15 @@ export function PaymentPanel({ items, total, onBack, onPaymentComplete }: Paymen
             <p className="text-muted-foreground">Total: Le {total.toLocaleString('en-SL')}</p>
             {paymentMethod === "cash" && change > 0 && (
               <p className="text-lg font-semibold mt-2">Change: Le {change.toLocaleString('en-SL')}</p>
+            )}
+            {printerConnected && receiptPrinted && (
+              <p className="text-green-600 text-sm mt-2">✓ Receipt printed</p>
+            )}
+            {printerConnected && !receiptPrinted && (
+              <p className="text-yellow-600 text-sm mt-2">⚠ Receipt printing failed</p>
+            )}
+            {!printerConnected && (
+              <p className="text-gray-600 text-sm mt-2">No printer connected</p>
             )}
           </div>
           <Button onClick={onPaymentComplete} className="mt-4">
@@ -160,7 +266,7 @@ export function PaymentPanel({ items, total, onBack, onPaymentComplete }: Paymen
             <Separator />
             <div className="flex justify-between font-semibold">
               <span>Total:</span>
-              <span>${total.toFixed(2)}</span>
+              <span>Le {total.toLocaleString('en-SL')}</span>
             </div>
           </CardContent>
         </Card>

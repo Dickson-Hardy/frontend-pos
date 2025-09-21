@@ -56,7 +56,7 @@ export function InventoryManagement() {
       const currentItem = inventoryItems.find(item => item.productId === productId)
       if (!currentItem) return
 
-      const quantityDiff = newQuantity - currentItem.currentStock
+      const quantityDiff = newQuantity - (currentItem.currentStock ?? 0)
       
       await apiClient.inventory.adjust({
         productId,
@@ -84,8 +84,11 @@ export function InventoryManagement() {
   }
 
   const getStockStatus = (item: InventoryItem) => {
-    if (item.currentStock === 0) return { status: 'Out of Stock', variant: 'destructive' as const }
-    if (item.currentStock <= item.minimumStock) return { status: 'Low Stock', variant: 'secondary' as const }
+    const currentStock = item.currentStock ?? 0
+    const minimumStock = item.minimumStock ?? 0
+    
+    if (currentStock === 0) return { status: 'Out of Stock', variant: 'destructive' as const }
+    if (currentStock <= minimumStock) return { status: 'Low Stock', variant: 'secondary' as const }
     return { status: 'In Stock', variant: 'default' as const }
   }
 
@@ -191,14 +194,14 @@ export function InventoryManagement() {
             ) : (
               inventoryItems.map((item) => {
                 const stockStatus = getStockStatus(item)
-                const currentAdjustment = adjustments[item.productId] ?? item.currentStock
+                const currentAdjustment = adjustments[item.productId] ?? item.currentStock ?? 0
                 
                 return (
                   <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex-1">
-                      <h3 className="font-medium">{item.product.name}</h3>
+                      <h3 className="font-medium">{item.product?.name || `Product ID: ${item.productId}`}</h3>
                       <p className="text-sm text-muted-foreground">
-                        Current Stock: {item.currentStock} | Min: {item.minimumStock} | Max: {item.maximumStock}
+                        Current Stock: {item.currentStock ?? 0} | Min: {item.minimumStock ?? 0} | Max: {item.maximumStock ?? 0}
                       </p>
                       <Badge variant={stockStatus.variant}>{stockStatus.status}</Badge>
                     </div>
@@ -224,7 +227,7 @@ export function InventoryManagement() {
                       >
                         <Plus className="h-3 w-3" />
                       </Button>
-                      {currentAdjustment !== item.currentStock && (
+                      {currentAdjustment !== (item.currentStock ?? 0) && (
                         <Button 
                           size="sm" 
                           className="bg-rose-600 hover:bg-rose-700"

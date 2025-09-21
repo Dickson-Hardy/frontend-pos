@@ -50,7 +50,7 @@ export interface RegisterData {
   outletId?: string
 }
 
-export type UserRole = 'admin' | 'manager' | 'cashier'
+export type UserRole = 'admin' | 'manager' | 'inventory_manager' | 'cashier'
 
 export interface Product {
   id: string
@@ -64,6 +64,8 @@ export interface Product {
   manufacturer?: string
   requiresPrescription: boolean
   isActive: boolean
+  minStockLevel?: number
+  expiryDate?: string
   outletId: string
   createdAt: Date
   updatedAt: Date
@@ -79,6 +81,9 @@ export interface CreateProductDto {
   category: string
   manufacturer?: string
   requiresPrescription: boolean
+  isActive?: boolean
+  minStockLevel?: number
+  expiryDate?: string
   outletId: string
 }
 
@@ -283,10 +288,21 @@ export interface PurchaseOrderStatistics {
 
 export interface Outlet {
   id: string
+  _id?: string // Optional MongoDB _id field
   name: string
   address: string
+  city: string
+  state: string
+  zipCode: string
   phone: string
-  email: string
+  email?: string
+  licenseNumber: string
+  managerId?: string
+  operatingHours?: {
+    open: string
+    close: string
+    days: string[]
+  }
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -295,8 +311,18 @@ export interface Outlet {
 export interface CreateOutletDto {
   name: string
   address: string
+  city: string
+  state: string
+  zipCode: string
   phone: string
-  email: string
+  email?: string
+  licenseNumber: string
+  managerId?: string
+  operatingHours?: {
+    open: string
+    close: string
+    days: string[]
+  }
 }
 
 export interface UpdateOutletDto extends Partial<CreateOutletDto> {}
@@ -483,22 +509,17 @@ class UnifiedApiClient {
               // Ensure the token is properly set in the axios instance defaults
               this.axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`
               
-              console.log('[API Client] Valid token found and loaded')
-              console.log('[API Client] Authorization header set in axios defaults')
             } else {
-              console.log('[API Client] Stored token is expired, clearing it')
               this.setToken(null)
             }
           } else {
-            console.log('[API Client] Invalid token format, clearing it')
             this.setToken(null)
           }
         } catch (error) {
-          console.log('[API Client] Error parsing token, clearing it:', error)
           this.setToken(null)
         }
       } else {
-        console.log('[API Client] No stored token found')
+        // No token found
       }
     }
   }
@@ -556,6 +577,10 @@ class UnifiedApiClient {
     // Response interceptor for error handling and token refresh
     this.axiosInstance.interceptors.response.use(
       (response: AxiosResponse) => {
+        // Transform MongoDB _id to id for consistency
+        if (response.data) {
+          response.data = this.transformMongoResponse(response.data)
+        }
         return response
       },
       async (error: AxiosError) => {
@@ -787,24 +812,47 @@ class UnifiedApiClient {
     throw lastError
   }
 
-  public setToken(token: string | null) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[API Client] Setting token:', token ? `${token.substring(0, 10)}...` : 'null')
+  // Transform MongoDB response to use 'id' instead of '_id'
+  private transformMongoResponse(data: any): any {
+    if (!data) return data
+
+    // Handle arrays
+    if (Array.isArray(data)) {
+      return data.map(item => this.transformMongoResponse(item))
     }
+
+    // Handle objects
+    if (typeof data === 'object' && data !== null) {
+      const transformed = { ...data }
+      
+      // Convert _id to id if _id exists and id doesn't
+      if (data._id && !data.id) {
+        transformed.id = data._id
+        delete transformed._id
+      }
+
+      // Recursively transform nested objects
+      for (const key in transformed) {
+        if (transformed.hasOwnProperty(key) && typeof transformed[key] === 'object') {
+          transformed[key] = this.transformMongoResponse(transformed[key])
+        }
+      }
+
+      return transformed
+    }
+
+    return data
+  }
+
+  public setToken(token: string | null) {
     this.token = token
     
     // Update Axios default headers
     if (token) {
       this.axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[API Client] Authorization header updated')
-      }
     } else if (this.axiosInstance.defaults.headers.common['Authorization']) {
       // Clear Authorization header if token is null
       delete this.axiosInstance.defaults.headers.common['Authorization']
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[API Client] Authorization header cleared')
-      }
     }
     
     if (typeof window !== 'undefined') {
@@ -817,9 +865,6 @@ class UnifiedApiClient {
         
         // Set cookie for middleware access (cannot set HttpOnly from JavaScript)
         document.cookie = `auth_token=${token}; path=/; max-age=${maxAge}; SameSite=${sameSite}${isSecure ? '; Secure' : ''}`
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[API Client] Token stored in localStorage and cookies')
-        }
       } else {
         // Clear token
         localStorage.removeItem('auth_token')
@@ -827,9 +872,6 @@ class UnifiedApiClient {
         localStorage.removeItem('session_start')
         document.cookie = `auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`
         document.cookie = `user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[API Client] Token cleared from localStorage and cookies')
-        }
       }
     }
   }

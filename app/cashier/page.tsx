@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { withAuth } from "@/contexts/auth-context"
 import { Header } from "@/components/pharmacy/header"
@@ -9,6 +9,9 @@ import { ProductSearch } from "@/components/cashier/product-search"
 import { ShoppingCart } from "@/components/cashier/shopping-cart"
 import { PaymentPanel } from "@/components/cashier/payment-panel"
 import { QuickActions } from "@/components/cashier/quick-actions"
+import { CustomerPanel } from "@/components/cashier/customer-panel"
+import { DiscountPanel } from "@/components/cashier/discount-panel"
+import { MobileCashierPage } from "@/components/cashier/mobile-pos-page"
 
 export interface CartItem {
   id: string
@@ -23,10 +26,51 @@ export interface CartItem {
   discount?: number
 }
 
+interface Customer {
+  id: string
+  name: string
+  phone?: string
+  email?: string
+  loyaltyNumber?: string
+  discountLevel?: number
+  totalPurchases?: number
+}
+
+interface Discount {
+  id: string
+  type: 'percentage' | 'fixed' | 'loyalty' | 'coupon'
+  value: number
+  label: string
+  code?: string
+  minAmount?: number
+  maxDiscount?: number
+}
+
 function CashierContent() {
+  // ALL HOOKS MUST BE CALLED AT THE TOP LEVEL - NEVER CONDITIONALLY
   const { user } = useAuth()
+  const [isMobile, setIsMobile] = useState(false)
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [showPayment, setShowPayment] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [appliedDiscounts, setAppliedDiscounts] = useState<Discount[]>([])
+
+  // Check if device is mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024) // lg breakpoint
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  // Return mobile version for mobile devices
+  if (isMobile) {
+    return <MobileCashierPage />
+  }
 
   const addToCart = (product: Omit<CartItem, "quantity">) => {
     setCartItems((prev) => {
@@ -52,11 +96,35 @@ function CashierContent() {
 
   const clearCart = () => {
     setCartItems([])
+    setSelectedCustomer(null)
+    setAppliedDiscounts([])
     setShowPayment(false)
   }
 
+  const handleApplyDiscount = (discount: Discount) => {
+    setAppliedDiscounts(prev => [...prev, discount])
+  }
+
+  const handleRemoveDiscount = (discountId: string) => {
+    setAppliedDiscounts(prev => prev.filter(d => d.id !== discountId))
+  }
+
+  const calculateDiscountAmount = () => {
+    const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
+    return appliedDiscounts.reduce((total, discount) => {
+      if (discount.type === 'percentage') {
+        const percentageDiscount = (subtotal * discount.value) / 100
+        return total + (discount.maxDiscount ? Math.min(percentageDiscount, discount.maxDiscount) : percentageDiscount)
+      } else {
+        return total + discount.value
+      }
+    }, 0)
+  }
+
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const totalDiscount = cartItems.reduce((sum, item) => sum + (item.discount || 0) * item.quantity, 0)
+  const totalItemDiscount = cartItems.reduce((sum, item) => sum + (item.discount || 0) * item.quantity, 0)
+  const appliedDiscountAmount = calculateDiscountAmount()
+  const totalDiscount = totalItemDiscount + appliedDiscountAmount
   const total = subtotal - totalDiscount
 
   return (
@@ -73,6 +141,21 @@ function CashierContent() {
         <div className="flex-1 p-4 space-y-4 overflow-y-auto">
           <ProductSearch onAddToCart={addToCart} />
           <QuickActions onAddToCart={addToCart} />
+        </div>
+
+        {/* Center Panel - Customer & Discounts */}
+        <div className="w-80 border-l border-r border-border p-4 space-y-4 overflow-y-auto">
+          <CustomerPanel 
+            selectedCustomer={selectedCustomer}
+            onCustomerSelect={setSelectedCustomer}
+          />
+          <DiscountPanel
+            appliedDiscounts={appliedDiscounts}
+            subtotal={subtotal}
+            onApplyDiscount={handleApplyDiscount}
+            onRemoveDiscount={handleRemoveDiscount}
+            customerDiscountLevel={selectedCustomer?.discountLevel}
+          />
         </div>
 
         {/* Right Panel - Cart & Payment */}
@@ -92,6 +175,8 @@ function CashierContent() {
             <PaymentPanel
               items={cartItems}
               total={total}
+              customer={selectedCustomer}
+              discounts={appliedDiscounts}
               onBack={() => setShowPayment(false)}
               onPaymentComplete={clearCart}
             />

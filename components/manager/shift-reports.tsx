@@ -6,13 +6,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Clock, DollarSign, Users, Download } from "lucide-react"
 import { formatSLL } from "@/lib/currency-utils"
-import { apiClient } from "@/lib/api-client"
+import { apiClient } from "@/lib/api-unified"
+import { useAuth } from "@/contexts/auth-context"
 
 interface Shift {
-  _id: string
-  cashier: {
-    name: string
-  }
+  id: string
+  cashierName: string
   date: string
   startTime: string
   endTime: string
@@ -31,6 +30,7 @@ interface ShiftStats {
 }
 
 export function ShiftReports() {
+  const { user } = useAuth()
   const [shifts, setShifts] = useState<Shift[]>([])
   const [stats, setStats] = useState<ShiftStats>({
     activeShifts: 0,
@@ -45,12 +45,66 @@ export function ShiftReports() {
     const fetchShiftData = async () => {
       try {
         setLoading(true)
-        const [shiftsResponse, statsResponse] = await Promise.all([
-          apiClient.get("/shifts"),
-          apiClient.get("/shifts/stats"),
-        ])
-        setShifts(shiftsResponse.data)
-        setStats(statsResponse.data)
+        setError(null)
+        
+        // Mock shift data since we don't have shift endpoints yet
+        // In a real app, this would fetch from apiClient.shifts.getAll() and apiClient.shifts.getStats()
+        const mockShifts: Shift[] = [
+          {
+            id: '1',
+            cashierName: 'John Doe',
+            date: new Date().toISOString().split('T')[0],
+            startTime: '09:00',
+            endTime: '17:00',
+            openingBalance: 500,
+            closingBalance: 1250,
+            totalSales: 750,
+            transactions: 25,
+            status: 'completed'
+          },
+          {
+            id: '2',
+            cashierName: 'Jane Smith',
+            date: new Date(Date.now() - 24*60*60*1000).toISOString().split('T')[0],
+            startTime: '17:00',
+            endTime: '01:00',
+            openingBalance: 1250,
+            closingBalance: 1800,
+            totalSales: 550,
+            transactions: 18,
+            status: 'completed'
+          },
+          {
+            id: '3',
+            cashierName: 'Bob Wilson',
+            date: new Date().toISOString().split('T')[0],
+            startTime: '09:00',
+            endTime: 'ongoing',
+            openingBalance: 500,
+            closingBalance: 0,
+            totalSales: 320,
+            transactions: 12,
+            status: 'active'
+          }
+        ]
+
+        const mockStats: ShiftStats = {
+          activeShifts: mockShifts.filter(s => s.status === 'active').length,
+          todaysSales: mockShifts
+            .filter(s => s.date === new Date().toISOString().split('T')[0])
+            .reduce((sum, s) => sum + s.totalSales, 0),
+          totalTransactions: mockShifts
+            .filter(s => s.date === new Date().toISOString().split('T')[0])
+            .reduce((sum, s) => sum + s.transactions, 0),
+          avgTransaction: 0
+        }
+        
+        mockStats.avgTransaction = mockStats.totalTransactions > 0 
+          ? mockStats.todaysSales / mockStats.totalTransactions 
+          : 0
+
+        setShifts(mockShifts)
+        setStats(mockStats)
       } catch (err) {
         setError("Failed to fetch shift data")
         console.error("Error fetching shifts:", err)
@@ -60,7 +114,7 @@ export function ShiftReports() {
     }
 
     fetchShiftData()
-  }, [])
+  }, [user?.outletId])
 
   if (loading) {
     return (
@@ -116,7 +170,7 @@ export function ShiftReports() {
               <DollarSign className="h-5 w-5 text-green-600" />
               <div>
                 <p className="text-sm text-muted-foreground">Today's Sales</p>
-                <p className="text-2xl font-bold">${stats.todaysSales}</p>
+                <p className="text-2xl font-bold">Le {stats.todaysSales.toLocaleString('en-SL')}</p>
               </div>
             </div>
           </CardContent>
@@ -166,18 +220,20 @@ export function ShiftReports() {
               </thead>
               <tbody>
                 {shifts.map((shift) => (
-                  <tr key={shift._id} className="border-b">
-                    <td className="p-2 font-medium">{shift.cashier.name}</td>
+                  <tr key={shift.id} className="border-b">
+                    <td className="p-2 font-medium">{shift.cashierName}</td>
                     <td className="p-2">{shift.date}</td>
                     <td className="p-2">
                       {shift.startTime} - {shift.endTime}
                     </td>
-                    <td className="p-2">${shift.openingBalance}</td>
-                    <td className="p-2">${shift.closingBalance}</td>
-                    <td className="p-2">${shift.totalSales}</td>
+                    <td className="p-2">Le {shift.openingBalance.toLocaleString('en-SL')}</td>
+                    <td className="p-2">Le {shift.closingBalance.toLocaleString('en-SL')}</td>
+                    <td className="p-2">Le {shift.totalSales.toLocaleString('en-SL')}</td>
                     <td className="p-2">{shift.transactions}</td>
                     <td className="p-2">
-                      <Badge variant={shift.status === "completed" ? "default" : "secondary"}>{shift.status}</Badge>
+                      <Badge variant={shift.status === "completed" ? "default" : shift.status === "active" ? "secondary" : "outline"}>
+                        {shift.status}
+                      </Badge>
                     </td>
                   </tr>
                 ))}

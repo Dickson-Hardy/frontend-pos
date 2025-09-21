@@ -9,19 +9,80 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { ErrorMessage } from "@/components/ui/error-message"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuditLogs } from "@/hooks/use-audit-logs"
+import { useToast } from "@/hooks/use-toast"
 
 export function AuditLogs() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
+  const [filters, setFilters] = useState({
+    severity: '',
+    dateFrom: '',
+    dateTo: '',
+    action: '',
+    outlet: ''
+  })
+  const [isExporting, setIsExporting] = useState(false)
   const { auditLogs, loading, error } = useAuditLogs()
 
   const filteredLogs = auditLogs.filter(
     (log) =>
-      log.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (log.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.details.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.outlet.toLowerCase().includes(searchTerm.toLowerCase()),
+      log.outlet.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (filters.severity === '' || log.severity === filters.severity) &&
+      (filters.action === '' || log.action.toLowerCase().includes(filters.action.toLowerCase())) &&
+      (filters.outlet === '' || log.outlet.toLowerCase().includes(filters.outlet.toLowerCase()))
   )
+
+  const { toast } = useToast()
+
+  const handleExport = async () => {
+    setIsExporting(true)
+    try {
+      // TODO: Replace with actual export API call
+      // await apiClient.auditLogs.export({ filters, format: 'csv' })
+      
+      // Simulate export
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      toast({
+        title: "Success",
+        description: "Audit logs exported successfully",
+      })
+    } catch (error) {
+      console.error('Failed to export audit logs:', error)
+      toast({
+        title: "Error",
+        description: "Failed to export audit logs",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const applyFilters = () => {
+    setIsFilterDialogOpen(false)
+    toast({
+      title: "Filters Applied",
+      description: `Showing ${filteredLogs.length} filtered results`,
+    })
+  }
+
+  const clearFilters = () => {
+    setFilters({
+      severity: '',
+      dateFrom: '',
+      dateTo: '',
+      action: '',
+      outlet: ''
+    })
+  }
 
   if (loading) {
     return (
@@ -69,13 +130,89 @@ export function AuditLogs() {
           <p className="text-muted-foreground">Track all system activities and user actions</p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline">
-            <Filter className="mr-2 h-4 w-4" />
-            Filter
-          </Button>
-          <Button variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Export
+          <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Filter className="mr-2 h-4 w-4" />
+                Filter
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Filter Audit Logs</DialogTitle>
+                <DialogDescription>
+                  Apply filters to narrow down the audit log results.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="severity">Severity</Label>
+                  <Select value={filters.severity} onValueChange={(value) => setFilters({...filters, severity: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All severities" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all-severities">All severities</SelectItem>
+                      <SelectItem value="info">Info</SelectItem>
+                      <SelectItem value="warning">Warning</SelectItem>
+                      <SelectItem value="error">Error</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="action">Action</Label>
+                  <Input
+                    id="action"
+                    value={filters.action}
+                    onChange={(e) => setFilters({...filters, action: e.target.value})}
+                    placeholder="Filter by action type"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="outlet">Outlet</Label>
+                  <Input
+                    id="outlet"
+                    value={filters.outlet}
+                    onChange={(e) => setFilters({...filters, outlet: e.target.value})}
+                    placeholder="Filter by outlet"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="dateFrom">Date From</Label>
+                    <Input
+                      id="dateFrom"
+                      type="date"
+                      value={filters.dateFrom}
+                      onChange={(e) => setFilters({...filters, dateFrom: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="dateTo">Date To</Label>
+                    <Input
+                      id="dateTo"
+                      type="date"
+                      value={filters.dateTo}
+                      onChange={(e) => setFilters({...filters, dateTo: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={clearFilters}>
+                  Clear Filters
+                </Button>
+                <Button onClick={applyFilters}>Apply Filters</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Button variant="outline" onClick={handleExport} disabled={isExporting}>
+            {isExporting ? (
+              <LoadingSpinner className="mr-2 h-4 w-4" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            {isExporting ? 'Exporting...' : 'Export'}
           </Button>
         </div>
       </div>

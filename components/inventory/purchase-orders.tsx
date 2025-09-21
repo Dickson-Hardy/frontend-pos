@@ -233,7 +233,7 @@ export function PurchaseOrders() {
                 <SelectValue placeholder="Supplier" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Suppliers</SelectItem>
+                <SelectItem value="all-suppliers">All Suppliers</SelectItem>
                 {suppliers.map((supplier) => (
                   <SelectItem key={supplier} value={supplier}>
                     {supplier}

@@ -5,45 +5,61 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Upload, Edit, Trash2, RefreshCw } from "lucide-react"
-import { apiClient, Product } from "@/lib/api-unified"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { Plus, Search, Upload, Edit, Trash2, RefreshCw, Package, AlertTriangle, DollarSign, Calendar } from "lucide-react"
+import { useProductMutations } from "@/hooks/use-products"
+import { useToast } from "@/hooks/use-toast"
+import { apiClient, Product, CreateProductDto } from "@/lib/api-unified"
 
 export function ProductManagement() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [activeTab, setActiveTab] = useState('all')
+  const [newProduct, setNewProduct] = useState<CreateProductDto>({
+    name: '',
+    description: '',
+    category: '',
+    manufacturer: '',
+    barcode: '',
+    price: 0,
+    cost: 0,
+    minStockLevel: 0,
+    unit: '',
+    requiresPrescription: false,
+    isActive: true,
+    expiryDate: '',
+    outletId: '',
+  })
+
+  const { createProduct, updateProduct, deleteProduct } = useProductMutations()
+  const { toast } = useToast()
+
+  // Local fetch of products
   const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
 
   const fetchProducts = async () => {
+    setLoading(true)
+    setError(null)
     try {
-      setLoading(true)
-      setError(null)
-      const data = await apiClient.products.getAll()
-      setProducts(data)
-    } catch (err) {
-      setError("Failed to fetch products")
-      console.error("Error fetching products:", err)
+      const items = await apiClient.products.getAll()
+      setProducts(items)
+    } catch (e) {
+      console.error('Failed to fetch products', e)
+      setError('Failed to load products')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await fetchProducts()
-    setRefreshing(false)
-  }
-
-  const handleDeleteProduct = async (productId: string) => {
-    if (!confirm("Are you sure you want to delete this product?")) return
-    
-    try {
-      await apiClient.products.delete(productId)
-      setProducts(products.filter(p => p.id !== productId))
-    } catch (err) {
-      console.error("Error deleting product:", err)
-      setError("Failed to delete product")
     }
   }
 
@@ -51,13 +67,116 @@ export function ProductManagement() {
     fetchProducts()
   }, [])
 
-  const filteredProducts = products.filter(
-    (product) =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.manufacturer && product.manufacturer.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (product.barcode && product.barcode.toLowerCase().includes(searchTerm.toLowerCase())),
-  )
+  // ...existing state and dialog handlers...
+
+  const handleAddProduct = async () => {
+    try {
+      await createProduct.mutate(newProduct)
+      setIsAddDialogOpen(false)
+      setNewProduct({
+        name: '',
+        description: '',
+        category: '',
+        manufacturer: '',
+        barcode: '',
+        price: 0,
+        cost: 0,
+        minStockLevel: 0,
+        unit: '',
+        requiresPrescription: false,
+        isActive: true,
+        expiryDate: '',
+        outletId: '',
+      })
+      toast({ title: "Success", description: "Product created successfully" })
+      fetchProducts()
+    } catch (error: any) {
+      console.error('Failed to create product:', error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create product",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product)
+    setIsEditDialogOpen(true)
+  }
+
+  const handleUpdateProduct = async () => {
+    if (!editingProduct) return
+    try {
+      await updateProduct.mutate(editingProduct.id, editingProduct)
+      setIsEditDialogOpen(false)
+      setEditingProduct(null)
+      toast({ title: "Success", description: "Product updated successfully" })
+      fetchProducts()
+    } catch (error: any) {
+      console.error('Failed to update product:', error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update product",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteProduct = async (productId: string) => {
+    if (confirm('Are you sure you want to delete this product?')) {
+      try {
+        await deleteProduct.mutate(productId)
+        toast({ title: "Success", description: "Product deleted successfully" })
+        fetchProducts()
+      } catch (error: any) {
+        console.error('Failed to delete product:', error)
+        toast({
+          title: "Error",
+          description: error.message || "Failed to delete product",
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
+  const handleUploadInvoice = async () => {
+    setIsUploadDialogOpen(false)
+    toast({
+      title: "Feature Coming Soon",
+      description: "Invoice upload functionality will be available soon",
+    })
+  }
+
+  // Use locally fetched products
+  const sourceProducts: Product[] = products
+
+  const filteredProducts = sourceProducts.filter((product: Product) => {
+    const term = searchTerm.trim().toLowerCase()
+    const includes = (v?: string) => (v ? v.toLowerCase().includes(term) : false)
+    const matchesSearch = term === '' ||
+      includes(product.name) ||
+      includes(product.category) ||
+      includes(product.manufacturer) ||
+      includes((product as any).barcode)
+
+    if (!matchesSearch) return false
+
+    if (activeTab === 'low-stock') return ((product as any).currentStock || 0) <= (product.minStockLevel || 0)
+    if (activeTab === 'expired') return !!(product as any).expiryDate && new Date((product as any).expiryDate) < new Date()
+    if (activeTab === 'inactive') return !product.isActive
+    // 'all'
+    return true
+  })
+
+  const getStockStatus = (product: Product) => {
+    const currentStock = (product as any).currentStock || 0
+    const minLevel = product.minStockLevel || 0
+    
+    if (currentStock === 0) return { label: 'Out of Stock', variant: 'destructive' as const }
+    if (currentStock <= minLevel) return { label: 'Low Stock', variant: 'secondary' as const }
+    return { label: 'In Stock', variant: 'default' as const }
+  }
 
   if (loading) {
     return (
@@ -66,7 +185,7 @@ export function ProductManagement() {
           <h1 className="text-2xl font-bold text-foreground">Product Management</h1>
         </div>
         <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading products...</p>
+          <LoadingSpinner text="Loading products..." />
         </div>
       </div>
     )
@@ -79,7 +198,14 @@ export function ProductManagement() {
           <h1 className="text-2xl font-bold text-foreground">Product Management</h1>
         </div>
         <div className="flex items-center justify-center h-64">
-          <p className="text-destructive">{error}</p>
+          <div className="text-center">
+            <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <p className="text-destructive">{error}</p>
+            <Button onClick={fetchProducts} className="mt-4">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -90,19 +216,260 @@ export function ProductManagement() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-foreground">Product Management</h1>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+          <Button variant="outline" onClick={fetchProducts}>
+            <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
-          <Button className="bg-rose-600 hover:bg-rose-700">
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Invoice
-          </Button>
-          <Button className="bg-rose-600 hover:bg-rose-700">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
-          </Button>
+          <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Upload className="h-4 w-4 mr-2" />
+                Upload Invoice
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Upload Invoice</DialogTitle>
+                <DialogDescription>
+                  Upload product invoice to automatically add products to inventory.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="invoice">Select Invoice File</Label>
+                  <Input id="invoice" type="file" accept=".pdf,.csv,.xlsx" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="supplier">Supplier</Label>
+                  <Select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select supplier" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="supplier1">PharmaCorp Ltd</SelectItem>
+                      <SelectItem value="supplier2">MediSupply Inc</SelectItem>
+                      <SelectItem value="supplier3">HealthDist Co</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsUploadDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUploadInvoice}>Upload & Process</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-rose-600 hover:bg-rose-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Product
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Add New Product</DialogTitle>
+                <DialogDescription>
+                  Add a new product to your pharmacy inventory.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4 max-h-[400px] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Product Name *</Label>
+                    <Input
+                      id="name"
+                      value={newProduct.name}
+                      onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
+                      placeholder="e.g., Paracetamol 500mg"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="barcode">Barcode</Label>
+                    <Input
+                      id="barcode"
+                      value={newProduct.barcode}
+                      onChange={(e) => setNewProduct({...newProduct, barcode: e.target.value})}
+                      placeholder="Product barcode"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={newProduct.description}
+                    onChange={(e) => setNewProduct({...newProduct, description: e.target.value})}
+                    placeholder="Product description"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category *</Label>
+                    <Select value={newProduct.category} onValueChange={(value) => setNewProduct({...newProduct, category: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="prescription">Prescription Drugs</SelectItem>
+                        <SelectItem value="otc">Over-the-Counter</SelectItem>
+                        <SelectItem value="vitamins">Vitamins & Supplements</SelectItem>
+                        <SelectItem value="medical-devices">Medical Devices</SelectItem>
+                        <SelectItem value="personal-care">Personal Care</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="manufacturer">Manufacturer</Label>
+                    <Input
+                      id="manufacturer"
+                      value={newProduct.manufacturer}
+                      onChange={(e) => setNewProduct({...newProduct, manufacturer: e.target.value})}
+                      placeholder="Manufacturer name"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="price">Selling Price (Le) *</Label>
+                    <Input
+                      id="price"
+                      type="number"
+                      value={newProduct.price}
+                      onChange={(e) => setNewProduct({...newProduct, price: parseFloat(e.target.value) || 0})}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="costPrice">Cost Price (Le)</Label>
+                    <Input
+                      id="costPrice"
+                      type="number"
+                      value={newProduct.cost}
+                      onChange={(e) => setNewProduct({...newProduct, cost: parseFloat(e.target.value) || 0})}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="unit">Unit</Label>
+                    <Select value={newProduct.unit} onValueChange={(value) => setNewProduct({...newProduct, unit: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="tablets">Tablets</SelectItem>
+                        <SelectItem value="capsules">Capsules</SelectItem>
+                        <SelectItem value="ml">Milliliters</SelectItem>
+                        <SelectItem value="bottles">Bottles</SelectItem>
+                        <SelectItem value="boxes">Boxes</SelectItem>
+                        <SelectItem value="pieces">Pieces</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="minStockLevel">Min Stock Level</Label>
+                    <Input
+                      id="minStockLevel"
+                      type="number"
+                      value={newProduct.minStockLevel}
+                      onChange={(e) => setNewProduct({...newProduct, minStockLevel: parseInt(e.target.value) || 0})}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="expiryDate">Expiry Date</Label>
+                    <Input
+                      id="expiryDate"
+                      type="date"
+                      value={newProduct.expiryDate}
+                      onChange={(e) => setNewProduct({...newProduct, expiryDate: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="prescription"
+                      checked={newProduct.requiresPrescription}
+                      onCheckedChange={(checked) => setNewProduct({...newProduct, requiresPrescription: checked})}
+                    />
+                    <Label htmlFor="prescription">Requires Prescription</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="active"
+                      checked={newProduct.isActive}
+                      onCheckedChange={(checked) => setNewProduct({...newProduct, isActive: checked})}
+                    />
+                    <Label htmlFor="active">Active Product</Label>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleAddProduct} disabled={createProduct.loading}>
+                  {createProduct.loading ? 'Creating...' : 'Create Product'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
+      </div>
+
+      {/* Product Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Package className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium">Total Products</span>
+            </div>
+            <p className="text-2xl font-bold">{sourceProducts.length}</p>
+            <p className="text-xs text-muted-foreground">All products</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-yellow-600" />
+              <span className="text-sm font-medium">Low Stock</span>
+            </div>
+            <p className="text-2xl font-bold">
+              {sourceProducts.filter((p: Product) => ((p as any).currentStock || 0) <= (p.minStockLevel || 0)).length}
+            </p>
+            <p className="text-xs text-muted-foreground">Need reorder</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-red-600" />
+              <span className="text-sm font-medium">Expiring Soon</span>
+            </div>
+            <p className="text-2xl font-bold">
+              {sourceProducts.filter((p: Product) => (p as any).expiryDate && new Date((p as any).expiryDate) < new Date(Date.now() + 30*24*60*60*1000)).length}
+            </p>
+            <p className="text-xs text-muted-foreground">Next 30 days</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-green-600" />
+              <span className="text-sm font-medium">Total Value</span>
+            </div>
+            <p className="text-2xl font-bold">
+              Le {sourceProducts.reduce((sum: number, p: Product) => sum + (((p as any).currentStock || 0) * (p.price || 0)), 0).toLocaleString('en-SL')}
+            </p>
+            <p className="text-xs text-muted-foreground">Inventory value</p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -121,66 +488,244 @@ export function ProductManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          {error && (
-            <div className="mb-4 p-3 bg-destructive/10 text-destructive rounded-md">
-              {error}
-            </div>
-          )}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-2">Product Name</th>
-                  <th className="text-left p-2">Category</th>
-                  <th className="text-left p-2">Manufacturer</th>
-                  <th className="text-left p-2">Stock Info</th>
-                  <th className="text-left p-2">Price</th>
-                  <th className="text-left p-2">Status</th>
-                  <th className="text-left p-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProducts.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                      {searchTerm ? "No products found matching your search" : "No products available"}
-                    </td>
-                  </tr>
-                ) : (
-                  filteredProducts.map((product) => (
-                    <tr key={product.id} className="border-b">
-                      <td className="p-2 font-medium">{product.name}</td>
-                      <td className="p-2">{product.category}</td>
-                      <td className="p-2">{product.manufacturer || "N/A"}</td>
-                      <td className="p-2">Stock info needed</td>
-                      <td className="p-2">Le {product.price.toLocaleString('en-SL')}</td>
-                      <td className="p-2">
-                        <Badge variant={product.isActive ? "default" : "secondary"}>
-                          {product.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </td>
-                      <td className="p-2">
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline">
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => handleDeleteProduct(product.id)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="all">All Products ({sourceProducts.length})</TabsTrigger>
+              <TabsTrigger value="low-stock">
+                Low Stock ({sourceProducts.filter((p: Product) => ((p as any).currentStock || 0) <= (p.minStockLevel || 0)).length})
+              </TabsTrigger>
+              <TabsTrigger value="expired">
+                Expiring ({sourceProducts.filter((p: Product) => (p as any).expiryDate && new Date((p as any).expiryDate) < new Date(Date.now() + 30*24*60*60*1000)).length})
+              </TabsTrigger>
+              <TabsTrigger value="inactive">
+                Inactive ({sourceProducts.filter((p: Product) => !p.isActive).length})
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value={activeTab}>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product Name</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Manufacturer</TableHead>
+                      <TableHead>Stock Info</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredProducts.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          {searchTerm ? "No products found matching your search" : "No products available"}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredProducts.map((product: Product) => {
+                        const stockStatus = getStockStatus(product)
+                        return (
+                          <TableRow key={product.id || `${product.name}-${(product as any).sku || (product as any).barcode || Math.random()}`}>
+                            <TableCell className="font-medium">
+                              <div>
+                                <p>{product.name || "N/A"}</p>
+                                {product.requiresPrescription && (
+                                  <Badge variant="outline" className="text-xs">Rx</Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>{product.category || "N/A"}</TableCell>
+                            <TableCell>{product.manufacturer || "N/A"}</TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <p className="text-sm">{(product as any).currentStock || 0} {product.unit || 'units'}</p>
+                                <Badge variant={stockStatus.variant} className="text-xs">
+                                  {stockStatus.label}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell>Le {product.price ? product.price.toLocaleString('en-SL') : 'N/A'}</TableCell>
+                            <TableCell>
+                              <Badge variant={product.isActive ? "default" : "secondary"}>
+                                {product.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button size="sm" variant="outline" onClick={() => handleEditProduct(product)}>
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => handleDeleteProduct(product.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
+
+      {/* Edit Product Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Edit Product</DialogTitle>
+            <DialogDescription>
+              Update product information.
+            </DialogDescription>
+          </DialogHeader>
+          {editingProduct && (
+            <div className="grid gap-4 py-4 max-h-[400px] overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editName">Product Name *</Label>
+                  <Input
+                    id="editName"
+                    value={editingProduct.name}
+                    onChange={(e) => setEditingProduct({...editingProduct, name: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editBarcode">Barcode</Label>
+                  <Input
+                    id="editBarcode"
+                    value={(editingProduct as any).barcode || ''}
+                    onChange={(e) => setEditingProduct({...editingProduct, barcode: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editDescription">Description</Label>
+                <Textarea
+                  id="editDescription"
+                  value={editingProduct.description || ''}
+                  onChange={(e) => setEditingProduct({...editingProduct, description: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editCategory">Category *</Label>
+                  <Select value={editingProduct.category} onValueChange={(value) => setEditingProduct({...editingProduct, category: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="prescription">Prescription Drugs</SelectItem>
+                      <SelectItem value="otc">Over-the-Counter</SelectItem>
+                      <SelectItem value="vitamins">Vitamins & Supplements</SelectItem>
+                      <SelectItem value="medical-devices">Medical Devices</SelectItem>
+                      <SelectItem value="personal-care">Personal Care</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editManufacturer">Manufacturer</Label>
+                  <Input
+                    id="editManufacturer"
+                    value={editingProduct.manufacturer || ''}
+                    onChange={(e) => setEditingProduct({...editingProduct, manufacturer: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editPrice">Selling Price (Le) *</Label>
+                  <Input
+                    id="editPrice"
+                    type="number"
+                    value={editingProduct.price}
+                    onChange={(e) => setEditingProduct({...editingProduct, price: parseFloat(e.target.value) || 0})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editCostPrice">Cost Price (Le)</Label>
+                  <Input
+                    id="editCostPrice"
+                    type="number"
+                    value={(editingProduct as any).cost || 0}
+                    onChange={(e) => setEditingProduct({...editingProduct, cost: parseFloat(e.target.value) || 0})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editUnit">Unit</Label>
+                  <Select value={editingProduct.unit || ''} onValueChange={(value) => setEditingProduct({...editingProduct, unit: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Unit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="tablets">Tablets</SelectItem>
+                      <SelectItem value="capsules">Capsules</SelectItem>
+                      <SelectItem value="ml">Milliliters</SelectItem>
+                      <SelectItem value="bottles">Bottles</SelectItem>
+                      <SelectItem value="boxes">Boxes</SelectItem>
+                      <SelectItem value="pieces">Pieces</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editMinStockLevel">Min Stock Level</Label>
+                  <Input
+                    id="editMinStockLevel"
+                    type="number"
+                    value={editingProduct.minStockLevel || 0}
+                    onChange={(e) => setEditingProduct({...editingProduct, minStockLevel: parseInt(e.target.value) || 0})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editExpiryDate">Expiry Date</Label>
+                  <Input
+                    id="editExpiryDate"
+                    type="date"
+                    value={(editingProduct as any).expiryDate || ''}
+                    onChange={(e) => setEditingProduct({...editingProduct, expiryDate: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="editPrescription"
+                    checked={editingProduct.requiresPrescription || false}
+                    onCheckedChange={(checked) => setEditingProduct({...editingProduct, requiresPrescription: checked})}
+                  />
+                  <Label htmlFor="editPrescription">Requires Prescription</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="editActive"
+                    checked={editingProduct.isActive}
+                    onCheckedChange={(checked) => setEditingProduct({...editingProduct, isActive: checked})}
+                  />
+                  <Label htmlFor="editActive">Active Product</Label>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateProduct} disabled={updateProduct.loading}>
+              {updateProduct.loading ? 'Updating...' : 'Update Product'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

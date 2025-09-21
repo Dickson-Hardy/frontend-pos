@@ -1,0 +1,145 @@
+/* Mobile PWA specific styles */
+
+/* Ensure safe area support for notched phones */
+.safe-area-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+}
+
+.safe-area-top {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+}
+
+/* Mobile scrolling optimization */
+.mobile-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Prevent zoom on input focus */
+@media screen and (max-width: 1024px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="tel"],
+  textarea,
+  select {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
+/* Touch target optimization */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Mobile-first responsive utilities */
+.mobile-only {
+  display: block;
+}
+
+.desktop-only {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .mobile-only {
+    display: none;
+  }
+  
+  .desktop-only {
+    display: block;
+  }
+}
+
+/* PWA specific styles */
+@media (display-mode: standalone) {
+  /* Styles for when app is installed as PWA */
+  body {
+    user-select: none; /* Disable text selection for native app feel */
+  }
+  
+  /* Hide scrollbars in standalone mode for cleaner look */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Enhanced touch feedback */
+.touch-feedback {
+  transition: all 0.15s ease;
+}
+
+.touch-feedback:active {
+  transform: scale(0.98);
+  opacity: 0.8;
+}
+
+/* Mobile card spacing */
+@media (max-width: 1024px) {
+  .mobile-card-spacing > * + * {
+    margin-top: 0.75rem;
+  }
+}
+
+/* Loading spinner for mobile */
+.mobile-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Bottom sheet animation */
+.bottom-sheet-enter {
+  animation: slideUpEnter 0.3s ease-out;
+}
+
+.bottom-sheet-exit {
+  animation: slideUpExit 0.3s ease-in;
+}
+
+@keyframes slideUpEnter {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUpExit {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* Mobile navigation improvements */
+.mobile-nav-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  min-height: 3rem;
+}
+
+/* Enhanced focus states for mobile */
+@media (max-width: 1024px) {
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+}

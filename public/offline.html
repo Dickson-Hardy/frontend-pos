@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline - Pharmacy POS</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+    
+    .container {
+      text-align: center;
+      max-width: 400px;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 40px;
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 20px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+    
+    h1 {
+      margin: 0 0 16px;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    
+    p {
+      margin: 0 0 24px;
+      opacity: 0.9;
+      line-height: 1.5;
+    }
+    
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    button {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
+    }
+    
+    .status {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    
+    .status.online {
+      background: rgba(34, 197, 94, 0.2);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    
+    .status.offline {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    
+    @media (max-width: 480px) {
+      .container {
+        margin: 20px;
+        padding: 30px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">📡</div>
+    <h1>You're Offline</h1>
+    <p>Your internet connection seems to be down. Don't worry, you can still access previously loaded content and the app will sync when you're back online.</p>
+    
+    <div class="actions">
+      <button onclick="tryReload()">Try Again</button>
+      <button onclick="goToCache()">Browse Cached Content</button>
+    </div>
+    
+    <div id="status" class="status offline">
+      Status: Offline
+    </div>
+  </div>
+
+  <script>
+    // Check online status
+    function updateStatus() {
+      const statusEl = document.getElementById('status')
+      if (navigator.onLine) {
+        statusEl.textContent = 'Status: Online'
+        statusEl.className = 'status online'
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+      } else {
+        statusEl.textContent = 'Status: Offline'
+        statusEl.className = 'status offline'
+      }
+    }
+    
+    // Try to reload the page
+    function tryReload() {
+      if (navigator.onLine) {
+        window.location.reload()
+      } else {
+        alert('Still offline. Please check your internet connection.')
+      }
+    }
+    
+    // Go to cached content (home page)
+    function goToCache() {
+      window.location.href = '/'
+    }
+    
+    // Listen for online/offline events
+    window.addEventListener('online', updateStatus)
+    window.addEventListener('offline', updateStatus)
+    
+    // Check status every 5 seconds
+    setInterval(updateStatus, 5000)
+    
+    // Initial status check
+    updateStatus()
+  </script>
+</body>
+</html>

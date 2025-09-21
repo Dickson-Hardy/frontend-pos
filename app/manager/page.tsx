@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useAuth } from "@/contexts/auth-context"
 import { Header } from "@/components/pharmacy/header"
 import { LayoutWrapper } from "@/components/pharmacy/layout-wrapper"
 import { ManagerSidebar } from "@/components/manager/manager-sidebar"
@@ -14,11 +15,13 @@ import { ProductManagement } from "@/components/manager/product-management"
 import { InventoryManagement } from "@/components/manager/inventory-management"
 import { ShiftReports } from "@/components/manager/shift-reports"
 import { SalesReports } from "@/components/manager/sales-reports"
+import { StaffManagement } from "@/components/manager/staff-management"
 import { withAuth } from "@/contexts/auth-context"
 
 type ManagerView = "dashboard" | "products" | "inventory" | "shifts" | "sales" | "staff"
 
 function ManagerPage() {
+  const { user } = useAuth()
   const [activeView, setActiveView] = useState<ManagerView>("dashboard")
 
   const renderContent = () => {
@@ -47,7 +50,7 @@ function ManagerPage() {
       case "sales":
         return <SalesReports />
       case "staff":
-        return <StaffPerformance />
+        return <StaffManagement />
       default:
         return <div>Dashboard content</div>
     }
@@ -55,7 +58,12 @@ function ManagerPage() {
 
   return (
     <LayoutWrapper role="manager">
-      <Header title="Manager Dashboard" role="manager" userName="Michael Chen" outletName="Downtown Pharmacy" />
+      <Header 
+        title="Manager Dashboard" 
+        role="manager" 
+        userName={user ? `${user.firstName} ${user.lastName}` : "Manager"} 
+        outletName={user?.outlet?.name || "Pharmacy"} 
+      />
 
       <div className="flex h-[calc(100vh-80px)]">
         <ManagerSidebar activeView={activeView} onViewChange={setActiveView} />

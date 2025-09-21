@@ -7,6 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { useToast } from "@/hooks/use-toast"
 import { 
   DollarSign,
   TrendingUp,
@@ -56,11 +61,50 @@ export function ReconciliationDashboard() {
   const [activeTab, setActiveTab] = useState('overview')
   const [reconciliations, setReconciliations] = useState<ReconciliationItem[]>([])
   const [summary, setSummary] = useState<ReconciliationSummary | null>(null)
-    const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isExporting, setIsExporting] = useState(false)
+  const [isNewReconciliationDialogOpen, setIsNewReconciliationDialogOpen] = useState(false)
 
   // Format currency for Sierra Leone Leones
   const formatSLL = (amount: number): string => {
     return `Le ${amount.toLocaleString('en-SL')}`
+  }
+
+  const { toast } = useToast()
+
+  const handleExportReport = async () => {
+    setIsExporting(true)
+    try {
+      // TODO: Replace with actual API call
+      // await apiClient.reconciliation.exportReport()
+      
+      // Simulate export
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      toast({
+        title: "Success",
+        description: "Reconciliation report exported successfully",
+      })
+    } catch (error) {
+      console.error('Failed to export report:', error)
+      toast({
+        title: "Error",
+        description: "Failed to export report",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handleNewReconciliation = (type: string) => {
+    setIsNewReconciliationDialogOpen(false)
+    // Navigate to specific reconciliation type
+    setActiveTab(type)
+    toast({
+      title: "New Reconciliation Started",
+      description: `${type.charAt(0).toUpperCase() + type.slice(1)} reconciliation initiated`,
+    })
   }
 
   // TODO: Replace with actual API calls to fetch reconciliation data
@@ -168,14 +212,83 @@ export function ReconciliationDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline">
-            <Download className="h-4 w-4 mr-2" />
-            Export Report
+          <Button variant="outline" onClick={handleExportReport} disabled={isExporting}>
+            {isExporting ? (
+              <LoadingSpinner className="h-4 w-4 mr-2" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
+            {isExporting ? 'Exporting...' : 'Export Report'}
           </Button>
-          <Button>
-            <Calculator className="h-4 w-4 mr-2" />
-            New Reconciliation
-          </Button>
+          <Dialog open={isNewReconciliationDialogOpen} onOpenChange={setIsNewReconciliationDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Calculator className="h-4 w-4 mr-2" />
+                New Reconciliation
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Start New Reconciliation</DialogTitle>
+                <DialogDescription>
+                  Choose the type of reconciliation you want to perform.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-1 gap-3">
+                  <Button 
+                    variant="outline" 
+                    className="justify-start h-auto p-4"
+                    onClick={() => handleNewReconciliation('cash')}
+                  >
+                    <DollarSign className="h-6 w-6 mr-3 text-green-600" />
+                    <div className="text-left">
+                      <p className="font-semibold">Daily Cash Reconciliation</p>
+                      <p className="text-sm text-muted-foreground">Count cash drawer and verify totals</p>
+                    </div>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="justify-start h-auto p-4"
+                    onClick={() => handleNewReconciliation('shift')}
+                  >
+                    <Users className="h-6 w-6 mr-3 text-blue-600" />
+                    <div className="text-left">
+                      <p className="font-semibold">Shift Reconciliation</p>
+                      <p className="text-sm text-muted-foreground">End-of-shift cash handover</p>
+                    </div>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="justify-start h-auto p-4"
+                    onClick={() => handleNewReconciliation('bank')}
+                  >
+                    <Building className="h-6 w-6 mr-3 text-purple-600" />
+                    <div className="text-left">
+                      <p className="font-semibold">Bank Reconciliation</p>
+                      <p className="text-sm text-muted-foreground">Match bank statements with POS</p>
+                    </div>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="justify-start h-auto p-4"
+                    onClick={() => handleNewReconciliation('inventory')}
+                  >
+                    <Package className="h-6 w-6 mr-3 text-orange-600" />
+                    <div className="text-left">
+                      <p className="font-semibold">Inventory Count</p>
+                      <p className="text-sm text-muted-foreground">Physical stock reconciliation</p>
+                    </div>
+                  </Button>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsNewReconciliationDialogOpen(false)}>
+                  Cancel
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 

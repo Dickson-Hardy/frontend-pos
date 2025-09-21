@@ -60,10 +60,14 @@ export function useApi<T>(
 
     // Check cache first
     if (cacheKey) {
-      const cachedData = cacheManager.get<T>(cacheKey)
-      if (cachedData) {
-        setData(cachedData)
-        return
+      try {
+        const cachedData = cacheManager.get<T>(cacheKey)
+        if (cachedData) {
+          setData(cachedData)
+          return
+        }
+      } catch (cacheError) {
+        console.warn(`Cache error for ${cacheKey}:`, cacheError)
       }
     }
 
@@ -71,22 +75,25 @@ export function useApi<T>(
     setError(null)
 
     try {
-      const result = await apiOptimizationUtils.createOptimizedCall(
-        cacheKey || `api-call-${Date.now()}`,
-        apiCall,
-        {
-          priority,
-          cacheDuration,
-          tags,
-          deduplicate,
-        }
-      )
-
+      const result = await apiCall()
+      
       if (!isMounted.current) return
 
       setData(result)
       setError(null)
       retryCount.current = 0
+
+      // Cache the result
+      if (cacheKey && result) {
+        try {
+          cacheManager.set(cacheKey, result, {
+            duration: cacheDuration,
+            tags,
+          })
+        } catch (cacheError) {
+          console.warn(`Failed to cache result:`, cacheError)
+        }
+      }
 
       // Prefetch related data if enabled
       if (prefetchRelated && cacheKey) {
@@ -113,7 +120,7 @@ export function useApi<T>(
         setLoading(false)
       }
     }
-  }, [apiCall, cacheKey, cacheDuration, retryAttempts, retryDelay, priority, tags, deduplicate, prefetchRelated])
+  }, [apiCall, cacheKey, cacheDuration, retryAttempts, retryDelay, tags])
 
   const shouldRetry = (error: ApiError): boolean => {
     // Retry on network errors or 5xx server errors

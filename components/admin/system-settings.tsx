@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Save, Database, Shield, Bell, Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -7,8 +8,58 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
+import { useToast } from "@/hooks/use-toast"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 export function SystemSettings() {
+  const [loading, setLoading] = useState(false)
+  const [settings, setSettings] = useState({
+    companyName: "PharmaPOS Network",
+    systemTimezone: "UTC-5 (Eastern)",
+    companyAddress: "123 Business District, City 12345",
+    twoFactorAuth: true,
+    sessionTimeout: "30",
+    passwordPolicy: true,
+    automaticBackups: true,
+    backupRetention: "30",
+    dataArchiving: false,
+    lowStockAlerts: true,
+    expiryWarnings: true,
+    systemMaintenance: true
+  })
+  const { toast } = useToast()
+
+  const handleSaveSettings = async () => {
+    setLoading(true)
+    try {
+      // TODO: Replace with actual API call
+      // await apiClient.settings.update(settings)
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      toast({
+        title: "Success",
+        description: "Settings saved successfully",
+      })
+    } catch (error) {
+      console.error('Failed to save settings:', error)
+      toast({
+        title: "Error",
+        description: "Failed to save settings",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const updateSetting = (key: string, value: any) => {
+    setSettings(prev => ({
+      ...prev,
+      [key]: value
+    }))
+  }
   return (
     <div className="space-y-6">
       <div>
@@ -30,16 +81,28 @@ export function SystemSettings() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="company-name">Company Name</Label>
-                <Input id="company-name" defaultValue="PharmaPOS Network" />
+                <Input 
+                  id="company-name" 
+                  value={settings.companyName}
+                  onChange={(e) => updateSetting('companyName', e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="system-timezone">System Timezone</Label>
-                <Input id="system-timezone" defaultValue="UTC-5 (Eastern)" />
+                <Input 
+                  id="system-timezone" 
+                  value={settings.systemTimezone}
+                  onChange={(e) => updateSetting('systemTimezone', e.target.value)}
+                />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="company-address">Company Address</Label>
-              <Input id="company-address" defaultValue="123 Business District, City 12345" />
+              <Input 
+                id="company-address" 
+                value={settings.companyAddress}
+                onChange={(e) => updateSetting('companyAddress', e.target.value)}
+              />
             </div>
           </CardContent>
         </Card>
@@ -59,7 +122,10 @@ export function SystemSettings() {
                 <Label>Two-Factor Authentication</Label>
                 <p className="text-sm text-muted-foreground">Require 2FA for all admin accounts</p>
               </div>
-              <Switch defaultChecked />
+              <Switch 
+                checked={settings.twoFactorAuth}
+                onCheckedChange={(checked) => updateSetting('twoFactorAuth', checked)}
+              />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
@@ -68,7 +134,11 @@ export function SystemSettings() {
                 <p className="text-sm text-muted-foreground">Auto-logout after inactivity</p>
               </div>
               <div className="w-32">
-                <Input defaultValue="30" placeholder="minutes" />
+                <Input 
+                  value={settings.sessionTimeout}
+                  onChange={(e) => updateSetting('sessionTimeout', e.target.value)}
+                  placeholder="minutes" 
+                />
               </div>
             </div>
             <Separator />
@@ -77,7 +147,10 @@ export function SystemSettings() {
                 <Label>Password Policy</Label>
                 <p className="text-sm text-muted-foreground">Enforce strong password requirements</p>
               </div>
-              <Switch defaultChecked />
+              <Switch 
+                checked={settings.passwordPolicy}
+                onCheckedChange={(checked) => updateSetting('passwordPolicy', checked)}
+              />
             </div>
           </CardContent>
         </Card>
@@ -97,7 +170,10 @@ export function SystemSettings() {
                 <Label>Automatic Backups</Label>
                 <p className="text-sm text-muted-foreground">Daily database backups</p>
               </div>
-              <Switch defaultChecked />
+              <Switch 
+                checked={settings.automaticBackups}
+                onCheckedChange={(checked) => updateSetting('automaticBackups', checked)}
+              />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
@@ -106,7 +182,11 @@ export function SystemSettings() {
                 <p className="text-sm text-muted-foreground">Keep backups for specified days</p>
               </div>
               <div className="w-32">
-                <Input defaultValue="30" placeholder="days" />
+                <Input 
+                  value={settings.backupRetention}
+                  onChange={(e) => updateSetting('backupRetention', e.target.value)}
+                  placeholder="days" 
+                />
               </div>
             </div>
             <Separator />
@@ -115,7 +195,10 @@ export function SystemSettings() {
                 <Label>Data Archiving</Label>
                 <p className="text-sm text-muted-foreground">Archive old transaction data</p>
               </div>
-              <Switch />
+              <Switch 
+                checked={settings.dataArchiving}
+                onCheckedChange={(checked) => updateSetting('dataArchiving', checked)}
+              />
             </div>
           </CardContent>
         </Card>
@@ -135,7 +218,10 @@ export function SystemSettings() {
                 <Label>Low Stock Alerts</Label>
                 <p className="text-sm text-muted-foreground">Notify when inventory is low</p>
               </div>
-              <Switch defaultChecked />
+              <Switch 
+                checked={settings.lowStockAlerts}
+                onCheckedChange={(checked) => updateSetting('lowStockAlerts', checked)}
+              />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
@@ -143,7 +229,10 @@ export function SystemSettings() {
                 <Label>Expiry Warnings</Label>
                 <p className="text-sm text-muted-foreground">Alert for expiring products</p>
               </div>
-              <Switch defaultChecked />
+              <Switch 
+                checked={settings.expiryWarnings}
+                onCheckedChange={(checked) => updateSetting('expiryWarnings', checked)}
+              />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
@@ -151,16 +240,23 @@ export function SystemSettings() {
                 <Label>System Maintenance</Label>
                 <p className="text-sm text-muted-foreground">Notify about system updates</p>
               </div>
-              <Switch defaultChecked />
+              <Switch 
+                checked={settings.systemMaintenance}
+                onCheckedChange={(checked) => updateSetting('systemMaintenance', checked)}
+              />
             </div>
           </CardContent>
         </Card>
 
         {/* Save Button */}
         <div className="flex justify-end">
-          <Button size="lg">
-            <Save className="mr-2 h-4 w-4" />
-            Save Settings
+          <Button size="lg" onClick={handleSaveSettings} disabled={loading}>
+            {loading ? (
+              <LoadingSpinner className="mr-2 h-4 w-4" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            {loading ? 'Saving...' : 'Save Settings'}
           </Button>
         </div>
       </div>
