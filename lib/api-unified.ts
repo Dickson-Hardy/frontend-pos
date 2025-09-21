@@ -233,6 +233,73 @@ export interface UpdateSupplierDto extends Partial<CreateSupplierDto> {
   status?: 'active' | 'inactive'
 }
 
+// Receipt Template Interfaces
+export interface ReceiptTemplate {
+  id: string
+  name: string
+  description?: string
+  status: 'active' | 'inactive' | 'draft'
+  outletId: string
+  createdBy: string
+  modifiedBy?: string
+  version: number
+  elements: ReceiptElement[]
+  paperConfig: PaperConfiguration
+  printerConfig: PrinterConfiguration
+  isDefault: boolean
+  isSystem: boolean
+  availableVariables: string[]
+  metadata: Record<string, any>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReceiptElement {
+  type: string
+  content: string
+  alignment: 'left' | 'center' | 'right'
+  fontSize: 'small' | 'medium' | 'large'
+  fontStyle: 'normal' | 'bold' | 'underline' | 'italic'
+  bold: boolean
+  underline: boolean
+  height: number
+  marginTop: number
+  marginBottom: number
+  properties: Record<string, any>
+}
+
+export interface PaperConfiguration {
+  width: number
+  unit: string
+  physicalWidth: number
+  physicalHeight: number
+}
+
+export interface PrinterConfiguration {
+  type: string
+  model: string
+  connectionType: 'bluetooth' | 'usb' | 'ethernet' | 'wifi'
+  commandSet: string
+  settings: Record<string, any>
+}
+
+export interface CreateReceiptTemplateDto {
+  name: string
+  description?: string
+  status?: 'active' | 'inactive' | 'draft'
+  outletId: string
+  elements: ReceiptElement[]
+  paperConfig: PaperConfiguration
+  printerConfig: PrinterConfiguration
+  isDefault?: boolean
+  availableVariables?: string[]
+  metadata?: Record<string, any>
+}
+
+export interface UpdateReceiptTemplateDto extends Partial<CreateReceiptTemplateDto> {
+  version?: number
+}
+
 export interface PurchaseOrder {
   id: string
   orderNumber: string
@@ -1458,6 +1525,95 @@ class UnifiedApiClient {
         console.warn(`Supplier ${id} deletion is simulated - no backend endpoint available`)
       } catch (error) {
         throw new Error(`Failed to delete supplier: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    },
+  }
+
+  // Receipt Templates API
+  receiptTemplates = {
+    getAll: async (outletId?: string, status?: 'active' | 'inactive' | 'draft'): Promise<ReceiptTemplate[]> => {
+      try {
+        const params = new URLSearchParams()
+        if (outletId) params.append('outletId', outletId)
+        if (status) params.append('status', status)
+        
+        const response = await this.axiosInstance.get(`/receipt-templates?${params.toString()}`)
+        return response.data
+      } catch (error) {
+        throw this.handleError(error as AxiosError)
+      }
+    },
+
+    getById: async (id: string): Promise<ReceiptTemplate> => {
+      try {
+        const response = await this.axiosInstance.get(`/receipt-templates/${id}`)
+        return response.data
+      } catch (error) {
+        throw this.handleError(error as AxiosError)
+      }
+    },
+
+    getDefault: async (outletId: string): Promise<ReceiptTemplate> => {
+      try {
+        const response = await this.axiosInstance.get(`/receipt-templates/default/${outletId}`)
+        return response.data
+      } catch (error) {
+        throw this.handleError(error as AxiosError)
+      }
+    },
+
+    create: async (template: CreateReceiptTemplateDto): Promise<ReceiptTemplate> => {
+      try {
+        const response = await this.axiosInstance.post('/receipt-templates', template)
+        return response.data
+      } catch (error) {
+        throw this.handleError(error as AxiosError)
+      }
+    },
+
+    update: async (id: string, template: UpdateReceiptTemplateDto): Promise<ReceiptTemplate> => {
+      try {
+        const response = await this.axiosInstance.patch(`/receipt-templates/${id}`, template)
+        return response.data
+      } catch (error) {
+        throw this.handleError(error as AxiosError)
+      }
+    },
+
+    duplicate: async (id: string): Promise<ReceiptTemplate> => {
+      try {
+        const response = await this.axiosInstance.post(`/receipt-templates/${id}/duplicate`)
+        return response.data
+      } catch (error) {
+        throw this.handleError(error as AxiosError)
+      }
+    },
+
+    setAsDefault: async (id: string): Promise<ReceiptTemplate> => {
+      try {
+        const response = await this.axiosInstance.patch(`/receipt-templates/${id}/set-default`)
+        return response.data
+      } catch (error) {
+        throw this.handleError(error as AxiosError)
+      }
+    },
+
+    preview: async (id: string, sampleData?: any): Promise<string> => {
+      try {
+        const response = await this.axiosInstance.get(`/receipt-templates/${id}/preview`, {
+          data: sampleData
+        })
+        return response.data
+      } catch (error) {
+        throw this.handleError(error as AxiosError)
+      }
+    },
+
+    delete: async (id: string): Promise<void> => {
+      try {
+        await this.axiosInstance.delete(`/receipt-templates/${id}`)
+      } catch (error) {
+        throw this.handleError(error as AxiosError)
       }
     },
   }

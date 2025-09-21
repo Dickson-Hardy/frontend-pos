@@ -90,11 +90,17 @@ export function ReceiptTemplateManagement() {
   useEffect(() => {
     const loadTemplates = async () => {
       try {
-        // For now, we'll use mock data since the API endpoint doesn't exist yet
-        console.log('Receipt templates API not yet implemented')
+        // Import API client dynamically
+        const { apiClient } = await import('@/lib/api-unified')
         
-        // Initialize with empty templates - will be replaced with real API later
-        setTemplates([])
+        // Fetch receipt templates from the actual API
+        const templatesData = await apiClient.receiptTemplates.getAll()
+        setTemplates(templatesData)
+        
+        toast({
+          title: "Templates Loaded",
+          description: `Loaded ${templatesData.length} receipt templates`,
+        })
       } catch (error) {
         console.error('Failed to load receipt templates:', error)
         toast({
@@ -135,7 +141,13 @@ export function ReceiptTemplateManagement() {
 
   const handleDuplicateTemplate = async (template: ReceiptTemplate) => {
     try {
-      // API call to duplicate template
+      const { apiClient } = await import('@/lib/api-unified')
+      await apiClient.receiptTemplates.duplicate(template.id)
+      
+      // Reload templates
+      const templatesData = await apiClient.receiptTemplates.getAll()
+      setTemplates(templatesData)
+      
       toast({
         title: "Template Duplicated",
         description: `Created a copy of "${template.name}"`,
@@ -151,8 +163,12 @@ export function ReceiptTemplateManagement() {
 
   const handleDeleteTemplate = async (templateId: string) => {
     try {
-      // API call to delete template
+      const { apiClient } = await import('@/lib/api-unified')
+      await apiClient.receiptTemplates.delete(templateId)
+      
+      // Remove from local state
       setTemplates(templates.filter(t => t.id !== templateId))
+      
       toast({
         title: "Template Deleted",
         description: "Template has been successfully removed",
@@ -168,11 +184,15 @@ export function ReceiptTemplateManagement() {
 
   const handleSetDefault = async (templateId: string) => {
     try {
-      // API call to set as default
+      const { apiClient } = await import('@/lib/api-unified')
+      await apiClient.receiptTemplates.setAsDefault(templateId)
+      
+      // Update local state
       setTemplates(templates.map(t => ({
         ...t,
         isDefault: t.id === templateId
       })))
+      
       toast({
         title: "Default Template Set",
         description: "Template is now the default for new receipts",
