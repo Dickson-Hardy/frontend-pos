@@ -403,11 +403,11 @@ export const dataValidations = {
   },
 
   // Inventory validations
-  validateInventoryAdjustment: (adjustment: { quantity: number; reason: string }): { isValid: boolean; errors: string[] } => {
+  validateInventoryAdjustment: (adjustment: { adjustedQuantity: number; reason: string }): { isValid: boolean; errors: string[] } => {
     const errors: string[] = []
 
-    if (typeof adjustment.quantity !== 'number') {
-      errors.push('Quantity must be a number')
+    if (typeof adjustment.adjustedQuantity !== 'number') {
+      errors.push('Adjusted quantity must be a number')
     }
 
     if (!adjustment.reason?.trim()) {

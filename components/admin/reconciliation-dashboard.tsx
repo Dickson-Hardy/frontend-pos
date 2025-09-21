@@ -163,13 +163,45 @@ export function ReconciliationDashboard() {
         
         setReconciliations(mockReconciliations)
         
-        // Create summary from available data
-        const totalVariance = mockReconciliations.reduce((sum, r) => sum + r.totalVariance, 0)
+        // Create summary from available data (align with interface)
+        const totalVariance = mockReconciliations.reduce((sum, r) => sum + (r.totalVariance || 0), 0)
+        const totalReconciliations = mockReconciliations.length
+        const pendingApprovals = mockReconciliations.filter(r => r.status === 'pending').length
+        const significantVariances = mockReconciliations.filter(r => r.hasSignificantVariance).length
+        const avgVariance = totalReconciliations ? totalVariance / totalReconciliations : 0
+
+        // Normalize types to expected keys
+        const typeKeyMap: Record<string, keyof ReconciliationSummary['byType']> = {
+          daily: 'daily_cash',
+          daily_cash: 'daily_cash',
+          shift_reconciliation: 'shift_reconciliation',
+          bank_reconciliation: 'bank_reconciliation',
+          inventory: 'inventory_count',
+          inventory_count: 'inventory_count',
+        }
+
+        const byTypeBase = { daily_cash: 0, shift_reconciliation: 0, bank_reconciliation: 0, inventory_count: 0 }
+        const byType = mockReconciliations.reduce((acc, r) => {
+          const key = typeKeyMap[r.type] || 'daily_cash'
+          acc[key] = (acc[key] || 0) + 1
+          return acc
+        }, { ...byTypeBase } as ReconciliationSummary['byType'])
+
+        const byStatusBase = { pending: 0, in_progress: 0, completed: 0, approved: 0, variance_found: 0 }
+        const byStatus = mockReconciliations.reduce((acc, r) => {
+          const key = (r.status || 'pending') as keyof ReconciliationSummary['byStatus']
+          acc[key] = (acc[key] || 0) + 1
+          return acc
+        }, { ...byStatusBase } as ReconciliationSummary['byStatus'])
+
         setSummary({
-          totalReconciliations: mockReconciliations.length,
-          pendingReconciliations: mockReconciliations.filter(r => r.status === 'pending').length,
-          totalVariance,
-          significantVariances: mockReconciliations.filter(r => r.hasSignificantVariance).length
+          totalReconciliations,
+          pendingApprovals,
+          significantVariances,
+          totalVarianceAmount: totalVariance,
+          avgVariance,
+          byType,
+          byStatus,
         })
         
       } catch (error) {
@@ -411,7 +443,7 @@ export function ReconciliationDashboard() {
                   <TrendingDown className="h-4 w-4 text-green-600" />
                   <span className="text-sm font-medium">Avg Variance</span>
                 </div>
-                <p className="text-2xl font-bold">Le {summary?.avgVariance.toLocaleString('en-SL') || '0'}</p>
+                <p className="text-2xl font-bold">Le {(summary?.avgVariance ?? 0).toLocaleString('en-SL')}</p>
                 <p className="text-xs text-muted-foreground">Monthly average</p>
               </CardContent>
             </Card>

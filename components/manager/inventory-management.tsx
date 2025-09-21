@@ -8,8 +8,14 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { AlertTriangle, Package, Plus, Minus, RefreshCw } from "lucide-react"
 import { apiClient, InventoryItem, InventoryStats } from "@/lib/api-unified"
+import { useAuth } from "@/contexts/auth-context"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+import { BatchManagement } from "../admin/batch-management"
 
 export function InventoryManagement() {
+  const { user } = useAuth()
   const [adjustmentReason, setAdjustmentReason] = useState("")
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
   const [stats, setStats] = useState<InventoryStats>({ totalItems: 0, totalValue: 0, lowStockCount: 0, outOfStockCount: 0 })
@@ -17,6 +23,10 @@ export function InventoryManagement() {
   const [error, setError] = useState<string | null>(null)
   const [adjustments, setAdjustments] = useState<{ [key: string]: number }>({})
   const [refreshing, setRefreshing] = useState(false)
+  const [isReasonOpen, setIsReasonOpen] = useState(false)
+  const [pendingAdjustment, setPendingAdjustment] = useState<{ productId: string; newQuantity: number } | null>(null)
+  const [isThresholdOpen, setIsThresholdOpen] = useState(false)
+  const [thresholds, setThresholds] = useState<{ productId: string; reorderLevel: number; maxStockLevel: number; productName?: string } | null>(null)
 
   const fetchInventoryData = async () => {
     try {
@@ -57,22 +67,57 @@ export function InventoryManagement() {
       if (!currentItem) return
 
       const quantityDiff = newQuantity - (currentItem.currentStock ?? 0)
-      
+      if (quantityDiff === 0) return
+
       await apiClient.inventory.adjust({
         productId,
-        quantity: Math.abs(quantityDiff),
-        reason: adjustmentReason,
-        type: quantityDiff >= 0 ? 'increase' : 'decrease',
         outletId: currentItem.outletId,
+        adjustedQuantity: quantityDiff,
+        reason: adjustmentReason,
+        adjustedBy: user?.id || "system",
+        type: quantityDiff > 0 ? 'increase' : 'decrease',
       })
       
       // Refresh data
       await fetchInventoryData()
       setAdjustmentReason("")
       setAdjustments({})
+      setIsReasonOpen(false)
+      setPendingAdjustment(null)
     } catch (err) {
       console.error("Error adjusting stock:", err)
       setError("Failed to adjust inventory")
+    }
+  }
+
+  const openReasonModal = (productId: string, newQuantity: number) => {
+    setPendingAdjustment({ productId, newQuantity })
+    setIsReasonOpen(true)
+  }
+
+  const openThresholdModal = (item: InventoryItem) => {
+    setThresholds({
+      productId: item.productId,
+      reorderLevel: item.minimumStock ?? 0,
+      maxStockLevel: item.maximumStock ?? 0,
+      productName: item.product?.name,
+    })
+    setIsThresholdOpen(true)
+  }
+
+  const saveThresholds = async () => {
+    if (!thresholds) return
+    try {
+      await apiClient.inventory.updateItem(thresholds.productId, {
+        reorderLevel: thresholds.reorderLevel,
+        maxStockLevel: thresholds.maxStockLevel,
+      })
+      await fetchInventoryData()
+      setIsThresholdOpen(false)
+      setThresholds(null)
+    } catch (err) {
+      console.error('Failed to update thresholds', err)
+      setError('Failed to update thresholds')
     }
   }
 
@@ -227,11 +272,14 @@ export function InventoryManagement() {
                       >
                         <Plus className="h-3 w-3" />
                       </Button>
+                      <Button size="sm" variant="outline" onClick={() => openThresholdModal(item)}>
+                        Edit thresholds
+                      </Button>
                       {currentAdjustment !== (item.currentStock ?? 0) && (
                         <Button 
                           size="sm" 
                           className="bg-rose-600 hover:bg-rose-700"
-                          onClick={() => handleStockAdjustment(item.productId, currentAdjustment)}
+                          onClick={() => openReasonModal(item.productId, currentAdjustment)}
                         >
                           Apply
                         </Button>
@@ -241,21 +289,89 @@ export function InventoryManagement() {
                 )
               })
             )}
-            {Object.keys(adjustments).length > 0 && (
-              <div className="mt-4 p-4 bg-muted rounded-lg">
-                <label className="block text-sm font-medium mb-2">Adjustment Reason (Required)</label>
-                <Textarea
-                  placeholder="Enter reason for inventory adjustment..."
-                  value={adjustmentReason}
-                  onChange={(e) => setAdjustmentReason(e.target.value)}
-                  className="mb-2"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Apply individual adjustments using the "Apply" button next to each item.
-                </p>
-              </div>
-            )}
+            {/* Reason Modal */}
+            <Dialog open={isReasonOpen} onOpenChange={setIsReasonOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Confirm Stock Adjustment</DialogTitle>
+                  <DialogDescription>Provide a reason to apply this change. This will be logged for audit.</DialogDescription>
+                </DialogHeader>
+                {pendingAdjustment && (() => {
+                  const item = inventoryItems.find(i => i.productId === pendingAdjustment.productId)
+                  const current = item?.currentStock ?? 0
+                  const diff = pendingAdjustment.newQuantity - current
+                  return (
+                    <div className="space-y-3">
+                      <div>
+                        <Label>Product</Label>
+                        <div className="mt-1 text-sm">{item?.product?.name || pendingAdjustment.productId}</div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 text-sm">
+                        <div><Label>Current</Label><div className="mt-1">{current}</div></div>
+                        <div><Label>New</Label><div className="mt-1">{pendingAdjustment.newQuantity}</div></div>
+                        <div><Label>Change</Label><div className="mt-1">{diff > 0 ? `+${diff}` : `${diff}`}</div></div>
+                      </div>
+                      <div>
+                        <Label>Reason</Label>
+                        <Textarea
+                          placeholder="Enter reason for inventory adjustment..."
+                          value={adjustmentReason}
+                          onChange={(e) => setAdjustmentReason(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setIsReasonOpen(false)}>Cancel</Button>
+                        <Button className="bg-rose-600 hover:bg-rose-700" onClick={() => handleStockAdjustment(pendingAdjustment.productId, pendingAdjustment.newQuantity)}>Confirm</Button>
+                      </div>
+                    </div>
+                  )
+                })()}
+              </DialogContent>
+            </Dialog>
+
+            {/* Thresholds Modal */}
+            <Dialog open={isThresholdOpen} onOpenChange={setIsThresholdOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Inventory Thresholds</DialogTitle>
+                  <DialogDescription>Update minimum and maximum stock levels.</DialogDescription>
+                </DialogHeader>
+                {thresholds && (
+                  <div className="space-y-3">
+                    <div>
+                      <Label>Product</Label>
+                      <div className="mt-1 text-sm">{thresholds.productName}</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Minimum (Reorder) Level</Label>
+                        <Input type="number" value={thresholds.reorderLevel} onChange={(e) => setThresholds({ ...thresholds, reorderLevel: parseInt(e.target.value) || 0 })} />
+                      </div>
+                      <div>
+                        <Label>Maximum Stock Level</Label>
+                        <Input type="number" value={thresholds.maxStockLevel} onChange={(e) => setThresholds({ ...thresholds, maxStockLevel: parseInt(e.target.value) || 0 })} />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" onClick={() => setIsThresholdOpen(false)}>Cancel</Button>
+                      <Button onClick={saveThresholds}>Save</Button>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
+        </CardContent>
+      </Card>
+
+      <Separator className="my-6" />
+      {/* Batches Management Panel */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Batch Management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BatchManagement />
         </CardContent>
       </Card>
     </div>

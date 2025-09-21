@@ -279,7 +279,7 @@ export function useInventoryMutations() {
       broadcastInventoryUpdate({
         productId: adjustment.productId,
         type: 'adjustment',
-        change: adjustment.quantity,
+        change: adjustment.adjustedQuantity,
         reason: adjustment.reason,
       })
     } catch (error) {

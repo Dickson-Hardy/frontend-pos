@@ -178,10 +178,12 @@ export interface InventoryStats {
 
 export interface InventoryAdjustment {
   productId: string
-  quantity: number
-  reason: string
-  type: 'increase' | 'decrease'
   outletId: string
+  adjustedQuantity: number
+  reason: string
+  adjustedBy: string
+  notes?: string
+  type: 'increase' | 'decrease' | 'damage' | 'expired' | 'return' | 'recount'
 }
 
 export interface Batch {
@@ -1242,10 +1244,62 @@ class UnifiedApiClient {
       await this.axiosInstance.post('/inventory/adjust', adjustment)
     },
 
-    getBatches: async (outletId?: string): Promise<Batch[]> => {
-      const params = outletId ? { outletId } : {}
+    // Items
+    updateItem: async (productId: string, data: { reorderLevel?: number; maxStockLevel?: number }) => {
+      const response = await this.axiosInstance.patch(`/inventory/items/${productId}`, data)
+      return response.data
+    },
+
+    // Batches
+    getBatches: async (outletId?: string, productId?: string): Promise<Batch[]> => {
+      const params: any = {}
+      if (outletId) params.outletId = outletId
+      if (productId) params.productId = productId
       const response = await this.axiosInstance.get<Batch[]>('/inventory/batches', { params })
       return response.data
+    },
+
+    getBatchById: async (id: string): Promise<Batch> => {
+      const response = await this.axiosInstance.get<Batch>(`/inventory/batches/${id}`)
+      return response.data
+    },
+
+    createBatch: async (data: {
+      batchNumber: string
+      productId: string
+      outletId: string
+      manufacturingDate: string
+      expiryDate: string
+      quantity: number
+      costPrice: number
+      sellingPrice: number
+      supplierName?: string
+      supplierInvoice?: string
+      notes?: string
+    }): Promise<Batch> => {
+      const response = await this.axiosInstance.post<Batch>('/inventory/batches', data)
+      return response.data
+    },
+
+    updateBatch: async (id: string, data: Partial<{
+      batchNumber: string
+      manufacturingDate: string
+      expiryDate: string
+      quantity: number
+      soldQuantity: number
+      costPrice: number
+      sellingPrice: number
+      status: string
+      supplierName?: string
+      supplierInvoice?: string
+      notes?: string
+    }>): Promise<Batch> => {
+      const response = await this.axiosInstance.patch<Batch>(`/inventory/batches/${id}`, data)
+      return response.data
+    },
+
+    deleteBatch: async (id: string): Promise<void> => {
+      await this.axiosInstance.delete(`/inventory/batches/${id}`)
     },
 
     getAdjustments: async (outletId?: string): Promise<InventoryAdjustment[]> => {
