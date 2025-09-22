@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { User, Search, Plus, UserCheck, Phone, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { useAuth } from "@/contexts/auth-context"
+import { useToast } from "@/hooks/use-toast"
 
 interface Customer {
   id: string
@@ -28,21 +29,33 @@ interface CustomerPanelProps {
 
 export function CustomerPanel({ selectedCustomer, onCustomerSelect }: CustomerPanelProps) {
   const { user } = useAuth()
+  const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isAddingCustomer, setIsAddingCustomer] = useState(false)
-  const [customers, setCustomers] = useState<Customer[]>([
-    // Mock data - in real app this would come from API
-    { id: '1', name: 'John Doe', phone: '+232 76 123456', email: 'john@example.com', loyaltyNumber: 'LOY001', discountLevel: 5, totalPurchases: 2500 },
-    { id: '2', name: 'Jane Smith', phone: '+232 76 789012', email: 'jane@example.com', loyaltyNumber: 'LOY002', discountLevel: 10, totalPurchases: 5000 },
-    { id: '3', name: 'Bob Wilson', phone: '+232 76 345678', email: 'bob@example.com', loyaltyNumber: 'LOY003', discountLevel: 0, totalPurchases: 500 },
-  ])
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [loading, setLoading] = useState(false)
   const [newCustomer, setNewCustomer] = useState({
     name: '',
     phone: '',
     email: '',
     loyaltyNumber: '',
   })
+
+  // Load customers from localStorage (simple persistence)
+  useEffect(() => {
+    const loadCustomers = () => {
+      try {
+        const savedCustomers = localStorage.getItem('pharmacy_customers')
+        if (savedCustomers) {
+          setCustomers(JSON.parse(savedCustomers))
+        }
+      } catch (error) {
+        console.error('Failed to load customers:', error)
+      }
+    }
+    loadCustomers()
+  }, [])
 
   const filteredCustomers = customers.filter(customer =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -51,24 +64,51 @@ export function CustomerPanel({ selectedCustomer, onCustomerSelect }: CustomerPa
     customer.loyaltyNumber?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  const saveCustomers = (updatedCustomers: Customer[]) => {
+    try {
+      localStorage.setItem('pharmacy_customers', JSON.stringify(updatedCustomers))
+      setCustomers(updatedCustomers)
+    } catch (error) {
+      console.error('Failed to save customers:', error)
+      toast({
+        title: "Error",
+        description: "Failed to save customer data",
+        variant: "destructive"
+      })
+    }
+  }
+
   const handleAddCustomer = () => {
-    if (!newCustomer.name) return
+    if (!newCustomer.name.trim()) {
+      toast({
+        title: "Error",
+        description: "Customer name is required",
+        variant: "destructive"
+      })
+      return
+    }
 
     const customer: Customer = {
       id: Date.now().toString(),
-      name: newCustomer.name,
-      phone: newCustomer.phone || undefined,
-      email: newCustomer.email || undefined,
-      loyaltyNumber: newCustomer.loyaltyNumber || undefined,
+      name: newCustomer.name.trim(),
+      phone: newCustomer.phone?.trim() || undefined,
+      email: newCustomer.email?.trim() || undefined,
+      loyaltyNumber: newCustomer.loyaltyNumber?.trim() || undefined,
       discountLevel: 0,
       totalPurchases: 0,
     }
 
-    setCustomers([...customers, customer])
+    const updatedCustomers = [...customers, customer]
+    saveCustomers(updatedCustomers)
     onCustomerSelect(customer)
     setNewCustomer({ name: '', phone: '', email: '', loyaltyNumber: '' })
     setIsAddingCustomer(false)
     setIsSearchOpen(false)
+    
+    toast({
+      title: "Success",
+      description: "Customer added successfully",
+    })
   }
 
   const handleSelectCustomer = (customer: Customer) => {
@@ -188,7 +228,12 @@ export function CustomerPanel({ selectedCustomer, onCustomerSelect }: CustomerPa
               </div>
 
               <div className="max-h-64 overflow-y-auto space-y-2">
-                {filteredCustomers.length > 0 ? (
+                {loading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <LoadingSpinner />
+                    <span className="ml-2 text-sm text-muted-foreground">Loading customers...</span>
+                  </div>
+                ) : filteredCustomers.length > 0 ? (
                   filteredCustomers.map((customer) => (
                     <Button
                       key={customer.id}
@@ -199,7 +244,10 @@ export function CustomerPanel({ selectedCustomer, onCustomerSelect }: CustomerPa
                       <div className="flex-1 text-left">
                         <div className="font-semibold">{customer.name}</div>
                         <div className="text-sm text-muted-foreground">
-                          {customer.phone} • {customer.loyaltyNumber}
+                          {customer.phone && customer.loyaltyNumber ? 
+                            `${customer.phone} • ${customer.loyaltyNumber}` :
+                            customer.phone || customer.loyaltyNumber || 'No contact info'
+                          }
                           {customer.discountLevel && customer.discountLevel > 0 && (
                             <Badge variant="secondary" className="ml-2 text-xs">
                               {customer.discountLevel}% discount
@@ -211,11 +259,21 @@ export function CustomerPanel({ selectedCustomer, onCustomerSelect }: CustomerPa
                   ))
                 ) : searchTerm ? (
                   <div className="text-center py-4 text-muted-foreground">
-                    <p>No customers found</p>
+                    <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>No customers found matching "{searchTerm}"</p>
+                    <p className="text-xs">Try a different search term or add a new customer</p>
+                  </div>
+                ) : customers.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>No customers added yet</p>
+                    <p className="text-xs">Add your first customer below</p>
                   </div>
                 ) : (
                   <div className="text-center py-4 text-muted-foreground">
+                    <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     <p>Start typing to search customers</p>
+                    <p className="text-xs">Search by name, phone, email, or loyalty number</p>
                   </div>
                 )}
               </div>

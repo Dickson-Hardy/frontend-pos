@@ -9,6 +9,7 @@ import { AuthProvider } from "@/contexts/auth-context"
 import { RealTimeProvider } from "@/contexts/real-time-context"
 import { ErrorProvider } from "@/contexts/error-context"
 import { LoadingProvider } from "@/contexts/loading-context"
+import { ShiftProvider } from "@/contexts/shift-context"
 import { ErrorBoundary } from "@/components/ui/error-boundary"
 import { NetworkStatus } from "@/components/ui/error-message"
 import { Toaster } from "@/components/ui/sonner"
@@ -79,7 +80,8 @@ export default function RootLayout({
                 <TokenSync />
                 <AuthRecovery />
                 <SessionExpiryWarning />
-                <RealTimeProvider>
+                <ShiftProvider>
+                  <RealTimeProvider>
                   <NetworkStatus />
                   <Suspense fallback={<div className="flex items-center justify-center min-h-screen">
                     <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
@@ -87,7 +89,8 @@ export default function RootLayout({
                     {children}
                   </Suspense>
                   <Toaster />
-                </RealTimeProvider>
+                  </RealTimeProvider>
+                </ShiftProvider>
               </AuthProvider>
             </LoadingProvider>
           </ErrorProvider>

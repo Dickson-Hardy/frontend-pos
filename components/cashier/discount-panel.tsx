@@ -41,12 +41,24 @@ export function DiscountPanel({
   const [discountValue, setDiscountValue] = useState("")
   const [couponCode, setCouponCode] = useState("")
 
-  // Mock available coupons - in real app this would come from API
-  const availableCoupons = [
-    { code: 'WELCOME10', discount: 10, type: 'percentage', minAmount: 100, label: 'Welcome 10% Off' },
-    { code: 'SAVE50', discount: 50, type: 'fixed', minAmount: 200, label: 'Save Le 50' },
-    { code: 'HEALTH20', discount: 20, type: 'percentage', minAmount: 150, label: 'Health Products 20% Off' },
+  // Standard discount options available to cashiers
+  const standardDiscounts = [
+    { code: 'STAFF5', discount: 5, type: 'percentage', minAmount: 0, label: 'Staff Discount 5%' },
+    { code: 'STAFF10', discount: 10, type: 'percentage', minAmount: 100, label: 'Staff Discount 10%' },
+    { code: 'BULK15', discount: 15, type: 'percentage', minAmount: 500, label: 'Bulk Purchase 15%' },
+    { code: 'SENIOR10', discount: 10, type: 'percentage', minAmount: 50, label: 'Senior Citizen 10%' },
+    { code: 'STUDENT5', discount: 5, type: 'percentage', minAmount: 25, label: 'Student Discount 5%' },
   ]
+
+  // Load custom coupons from localStorage (simple persistence)
+  const [availableCoupons, setAvailableCoupons] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pharmacy_coupons')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
 
   const calculateTotalDiscount = () => {
     return appliedDiscounts.reduce((total, discount) => {

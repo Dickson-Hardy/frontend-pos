@@ -560,13 +560,17 @@ export interface Shift {
   id: string
   cashierId: string
   cashier: User
-  startTime: Date
-  endTime?: Date
+  startTime: string
+  endTime?: string
   openingBalance: number
   closingBalance?: number
   totalSales: number
+  totalExpenses: number
+  netAmount: number
   status: 'active' | 'closed'
   outletId: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface StartShiftDto {
@@ -1483,13 +1487,76 @@ class UnifiedApiClient {
       return response.data
     },
 
+    getCurrent: async (): Promise<Shift | null> => {
+      const response = await this.axiosInstance.get<Shift>('/shifts/current')
+      return response.data
+    },
+
+    getDailyShifts: async (date: string): Promise<Shift[]> => {
+      const response = await this.axiosInstance.get<Shift[]>(`/shifts/daily?date=${date}`)
+      return response.data
+    },
+
+    getDailySummary: async (date: string): Promise<any> => {
+      const response = await this.axiosInstance.get<any>(`/shifts/daily/summary?date=${date}`)
+      return response.data
+    },
+
+    getById: async (id: string): Promise<Shift> => {
+      const response = await this.axiosInstance.get<Shift>(`/shifts/${id}`)
+      return response.data
+    },
+
+    getShiftReport: async (id: string): Promise<any> => {
+      const response = await this.axiosInstance.get<any>(`/shifts/${id}/report`)
+      return response.data
+    },
+
+    getShiftExpenses: async (id: string): Promise<any[]> => {
+      const response = await this.axiosInstance.get<any[]>(`/shifts/${id}/expenses`)
+      return response.data
+    },
+
+    addExpense: async (id: string, data: any): Promise<any> => {
+      const response = await this.axiosInstance.post<any>(`/shifts/${id}/expenses`, data)
+      return response.data
+    },
+
     start: async (data: StartShiftDto): Promise<Shift> => {
-      const response = await this.axiosInstance.post<Shift>('/shifts/start', data)
+      const response = await this.axiosInstance.post<Shift>('/shifts', data)
       return response.data
     },
 
     end: async (id: string, data: EndShiftDto): Promise<Shift> => {
-      const response = await this.axiosInstance.post<Shift>(`/shifts/${id}/end`, data)
+      const response = await this.axiosInstance.put<Shift>(`/shifts/${id}/end`, data)
+      return response.data
+    },
+
+    handover: async (id: string, data: any): Promise<any> => {
+      const response = await this.axiosInstance.post<any>(`/shifts/${id}/handover`, data)
+      return response.data
+    },
+  }
+
+  // Reconciliation methods
+  reconciliation = {
+    getAll: async (): Promise<any[]> => {
+      const response = await this.axiosInstance.get<any[]>('/reconciliation')
+      return response.data
+    },
+
+    getSummary: async (): Promise<any> => {
+      const response = await this.axiosInstance.get<any>('/reconciliation/summary')
+      return response.data
+    },
+
+    submitDailyCash: async (data: any): Promise<any> => {
+      const response = await this.axiosInstance.post<any>('/reconciliation/daily-cash/submit', data)
+      return response.data
+    },
+
+    completeInventory: async (data: any): Promise<any> => {
+      const response = await this.axiosInstance.post<any>('/reconciliation/inventory/complete', data)
       return response.data
     },
   }

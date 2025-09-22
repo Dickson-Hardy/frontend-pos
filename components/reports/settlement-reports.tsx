@@ -109,41 +109,57 @@ export function SettlementReports() {
         // Import API client dynamically
         const { apiClient } = await import('@/lib/api-unified')
         
-        // Get sales data to construct settlement information
-        const salesData = await apiClient.sales.getDailySummary()
+        // Get actual sales data to analyze payment methods
+        const salesData = await apiClient.sales.getAll({
+          startDate: new Date().toISOString().split('T')[0],
+          endDate: new Date().toISOString().split('T')[0]
+        } as any)
         
-        // Create settlement data from sales information
-        const mockSettlements = [
-          {
-            id: 'settlement_1',
-            date: new Date().toISOString().split('T')[0],
-            method: 'card',
-            amount: salesData.totalSales * 0.6, // 60% card payments
-            transactions: Math.floor(salesData.transactionCount * 0.6),
-            fees: salesData.totalSales * 0.6 * 0.025, // 2.5% processing fee
-            netAmount: salesData.totalSales * 0.6 * 0.975
-          },
-          {
-            id: 'settlement_2',
-            date: new Date().toISOString().split('T')[0],
-            method: 'cash',
-            amount: salesData.totalSales * 0.3, // 30% cash payments
-            transactions: Math.floor(salesData.transactionCount * 0.3),
-            fees: 0, // No fees for cash
-            netAmount: salesData.totalSales * 0.3
-          },
-          {
-            id: 'settlement_3',
-            date: new Date().toISOString().split('T')[0],
-            method: 'mobile',
-            amount: salesData.totalSales * 0.1, // 10% mobile payments
-            transactions: Math.floor(salesData.transactionCount * 0.1),
-            fees: salesData.totalSales * 0.1 * 0.015, // 1.5% mobile processing fee
-            netAmount: salesData.totalSales * 0.1 * 0.985
+        // Analyze payment methods from actual sales
+        const paymentMethodStats = new Map<string, {
+          amount: number
+          transactions: number
+          fees: number
+        }>()
+        
+        salesData.forEach((sale: any) => {
+          const method = sale.paymentMethod || 'cash'
+          const existing = paymentMethodStats.get(method) || { amount: 0, transactions: 0, fees: 0 }
+          
+          existing.amount += sale.total || 0
+          existing.transactions += 1
+          
+          // Calculate fees based on payment method
+          let feeRate = 0
+          switch (method) {
+            case 'card':
+              feeRate = 0.025 // 2.5% for card payments
+              break
+            case 'mobile':
+              feeRate = 0.015 // 1.5% for mobile payments
+              break
+            case 'cash':
+            case 'insurance':
+              feeRate = 0 // No fees for cash or insurance
+              break
           }
-        ]
+          
+          existing.fees += (sale.total || 0) * feeRate
+          paymentMethodStats.set(method, existing)
+        })
         
-        setDailySettlements(mockSettlements)
+        // Convert to settlement format
+        const settlements = Array.from(paymentMethodStats.entries()).map(([method, stats], index) => ({
+          id: `settlement_${index + 1}`,
+          date: new Date().toISOString().split('T')[0],
+          method: method,
+          amount: stats.amount,
+          transactions: stats.transactions,
+          fees: stats.fees,
+          netAmount: stats.amount - stats.fees
+        }))
+        
+        setDailySettlements(settlements)
       } catch (error) {
         console.error('Failed to fetch settlement data:', error)
         setDailySettlements([])

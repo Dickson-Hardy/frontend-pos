@@ -28,14 +28,21 @@ interface ProductFormState {
   barcode: string
   price: number | undefined
   cost: number | undefined
-  minStockLevel: number
+  minStockLevel: number // This represents initial stock quantity
   unit: string
   requiresPrescription: boolean
   isActive: boolean
   expiryDate: string
   outletId: string
   allowUnitSale: boolean
-  packVariants: PackVariant[]
+  // New fields for pack-based products
+  packSize: number
+  genericName: string
+  strength: string
+  form: string
+  brandName: string
+  // Remove old pack variants system
+  // packVariants: PackVariant[]
 }
 
 export function ProductManagement() {
@@ -54,14 +61,19 @@ export function ProductManagement() {
     barcode: '',
     price: undefined as any,
     cost: undefined as any,
-    minStockLevel: 0,
+    minStockLevel: 0, // Initial stock quantity
     unit: '',
     requiresPrescription: false,
     isActive: true,
     expiryDate: '',
     outletId: '',
     allowUnitSale: true,
-    packVariants: [],
+    // New pack-based fields
+    packSize: 1,
+    genericName: '',
+    strength: '',
+    form: '',
+    brandName: '',
   })
 
   const { createProduct, updateProduct, deleteProduct } = useProductMutations()
@@ -90,166 +102,43 @@ export function ProductManagement() {
     fetchProducts()
   }, [user?.outletId])
 
-  // Pack variant management functions
-  const addPackVariant = () => {
-    const newVariant: PackVariant = {
-      packSize: 1,
-      packPrice: 0,
-      unitPrice: 0,
-      isActive: true,
-      name: '',
-    }
-    setNewProduct(prev => ({
-      ...prev,
-      packVariants: [...(prev.packVariants || []), newVariant]
-    }))
-  }
-
-  const updatePackVariant = (index: number, field: keyof PackVariant, value: any) => {
-    setNewProduct(prev => {
-      const updatedVariants = prev.packVariants?.map((variant, i) => {
-        if (i === index) {
-          const updatedVariant = { ...variant, [field]: value }
-          
-          // Auto-calculate related fields
-          if (field === 'packPrice' && updatedVariant.packSize > 0) {
-            // When pack price changes, auto-calculate unit price
-            updatedVariant.unitPrice = updatedVariant.packPrice / updatedVariant.packSize
-          } else if (field === 'unitPrice' && updatedVariant.packSize > 0) {
-            // When unit price changes, auto-calculate pack price
-            updatedVariant.packPrice = updatedVariant.unitPrice * updatedVariant.packSize
-          } else if (field === 'packSize' && updatedVariant.unitPrice > 0) {
-            // When pack size changes, auto-calculate pack price
-            updatedVariant.packPrice = updatedVariant.unitPrice * updatedVariant.packSize
-          }
-          
-          return updatedVariant
-        }
-        return variant
-      }) || []
-      
-      return {
-        ...prev,
-        packVariants: updatedVariants
-      }
-    })
-  }
-
-  const removePackVariant = (index: number) => {
-    setNewProduct(prev => ({
-      ...prev,
-      packVariants: prev.packVariants?.filter((_, i) => i !== index) || []
-    }))
-  }
-
-  // Helper functions for pack variant calculations and validation
-  const calculateSavings = (unitPrice: number, individualPrice: number) => {
-    if (unitPrice >= individualPrice || individualPrice <= 0) return 0
-    return ((individualPrice - unitPrice) / individualPrice * 100).toFixed(1)
-  }
-
-  const validatePackVariant = (variant: PackVariant, individualPrice: number) => {
-    const errors = []
+  // Pack-based product validation
+  const validatePackProduct = () => {
+    const errors: string[] = []
     
-    if (variant.packSize <= 1) {
-      errors.push("Pack size must be greater than 1")
+    if (!newProduct.genericName?.trim()) {
+      errors.push("Generic name is required")
     }
     
-    if (variant.unitPrice > individualPrice) {
-      errors.push("Pack unit price cannot exceed individual price")
+    if (!newProduct.strength?.trim()) {
+      errors.push("Strength is required")
     }
     
-    const calculatedPackPrice = variant.unitPrice * variant.packSize
-    if (Math.abs(variant.packPrice - calculatedPackPrice) > 0.01) {
-      errors.push("Pack price doesn't match unit price × pack size")
+    if (!newProduct.form?.trim()) {
+      errors.push("Form is required")
+    }
+    
+    if (newProduct.packSize < 1) {
+      errors.push("Pack size must be at least 1")
     }
     
     return errors
   }
 
-  const suggestPackVariants = (individualPrice: number) => {
-    const suggestions = [
-      { packSize: 10, discountPercent: 15 },
-      { packSize: 20, discountPercent: 25 },
-      { packSize: 50, discountPercent: 35 },
-    ]
-    
-    return suggestions.map(suggestion => ({
-      packSize: suggestion.packSize,
-      unitPrice: individualPrice * (1 - suggestion.discountPercent / 100),
-      packPrice: individualPrice * suggestion.packSize * (1 - suggestion.discountPercent / 100),
-      name: `${suggestion.packSize}-pack`,
-      isActive: true,
-    }))
-  }
-
-  const addSuggestedPacks = () => {
-    if (!newProduct.price || newProduct.price <= 0) {
-      toast({ title: "Error", description: "Please set individual price first", variant: "destructive" })
-      return
-    }
-    
-    const suggestions = suggestPackVariants(newProduct.price)
-    setNewProduct(prev => ({
-      ...prev,
-      packVariants: [...(prev.packVariants || []), ...suggestions]
-    }))
-    toast({ title: "Success", description: "Added suggested pack variants" })
-  }
-
-  // Similar functions for editing product
-  const addEditPackVariant = () => {
-    if (!editingProduct) return
-    const newVariant: PackVariant = {
-      packSize: 1,
-      packPrice: 0,
-      unitPrice: 0,
-      isActive: true,
-      name: '',
-    }
-    setEditingProduct(prev => prev ? ({
-      ...prev,
-      packVariants: [...(prev.packVariants || []), newVariant]
-    }) : null)
-  }
-
-  const updateEditPackVariant = (index: number, field: keyof PackVariant, value: any) => {
-    setEditingProduct(prev => prev ? ({
-      ...prev,
-      packVariants: prev.packVariants?.map((variant, i) => 
-        i === index ? { ...variant, [field]: value } : variant
-      ) || []
-    }) : null)
-  }
-
-  const removeEditPackVariant = (index: number) => {
-    setEditingProduct(prev => prev ? ({
-      ...prev,
-      packVariants: prev.packVariants?.filter((_, i) => i !== index) || []
-    }) : null)
-  }
+  // Pack-based product editing functions (simplified)
+  // handleEditProduct function is defined later in the file
 
   // ...existing state and dialog handlers...
 
   const handleAddProduct = async () => {
     try {
-      // Validate pack variants before submission
-      const individualPrice = newProduct.price || 0
-      const packValidationErrors = []
+      // Validate pack-based product before submission
+      const validationErrors = validatePackProduct()
       
-      if (newProduct.packVariants && newProduct.packVariants.length > 0) {
-        newProduct.packVariants.forEach((variant, index) => {
-          const errors = validatePackVariant(variant, individualPrice)
-          if (errors.length > 0) {
-            packValidationErrors.push(`Pack Variant ${index + 1}: ${errors.join(', ')}`)
-          }
-        })
-      }
-      
-      if (packValidationErrors.length > 0) {
+      if (validationErrors.length > 0) {
         toast({ 
           title: "Validation Error", 
-          description: packValidationErrors.join('; '), 
+          description: validationErrors.join('; '), 
           variant: "destructive" 
         })
         return
@@ -257,12 +146,24 @@ export function ProductManagement() {
 
       // Ensure outletId defaults to current outlet if not set
       const outletId = newProduct.outletId || user?.outletId || ''
-      const name = newProduct.name?.trim() || ''
+      
+      // Generate product name with pack size
+      const genericName = newProduct.genericName?.trim() || newProduct.name?.trim() || ''
+      const strength = newProduct.strength?.trim() || ''
+      const form = newProduct.form?.trim() || ''
+      const brandName = newProduct.brandName?.trim() || ''
+      const packSize = newProduct.packSize || 1
+      
+      // Create product name following the convention: "GenericName Strength – BrandName – Pack of X Form"
+      const productName = `${genericName} ${strength}${brandName ? ` – ${brandName}` : ''} – Pack of ${packSize} ${form || newProduct.unit || 'units'}`
+      
+      // Generate SKU with pack size: "GENERIC-STRENGTH-PACKSIZE"
+      const skuBase = `${genericName.toUpperCase().replace(/[^A-Z0-9]+/g, '')}-${strength.replace(/[^A-Z0-9]+/g, '')}`
+      const generatedSku = `${skuBase}-${packSize}`
       
       // Generate or normalize required backend fields
-      const generatedSku = `${name.toUpperCase().replace(/[^A-Z0-9]+/g, '-').slice(0, 16)}-${Date.now().toString().slice(-4)}`
-      const strengthFromName = (() => {
-        const m = name.match(/(\d+\s?(mg|ml|g))/i)
+      const strengthFromName = strength || (() => {
+        const m = productName.match(/(\d+\s?(mg|ml|g))/i)
         return m ? m[0] : '1 unit'
       })()
       
@@ -304,30 +205,25 @@ export function ProductManagement() {
 
       // Build payload with exact backend DTO structure
       const payload = {
-        name: name,
+        name: productName,
         sku: generatedSku,
         barcode: newProduct.barcode || '',
         description: newProduct.description || 'No description provided',
         category: normalizeCategory(newProduct.category),
         manufacturer: newProduct.manufacturer || '',
-        genericName: name, // Use name as generic name
+        genericName: genericName,
         strength: strengthFromName,
         unitOfMeasure: normalizeUnitOfMeasure(newProduct.unit),
         costPrice: newProduct.cost ?? 0,
         sellingPrice: newProduct.price ?? 0,
-        stockQuantity: 0,
-        reorderLevel: newProduct.minStockLevel || 10,
+        stockQuantity: newProduct.minStockLevel || 0,
+        reorderLevel: Math.max(newProduct.minStockLevel || 0, 10),
         maxStockLevel: Math.max((newProduct.minStockLevel || 0) + 100, 100),
         requiresPrescription: !!newProduct.requiresPrescription,
         outletId: outletId,
         allowUnitSale: newProduct.allowUnitSale !== false,
-        packVariants: (newProduct.packVariants || []).map((v: PackVariant) => ({
-          name: v.name || '',
-          packSize: v.packSize,
-          packPrice: v.packPrice,
-          unitPrice: v.unitPrice,
-          isActive: v.isActive !== false,
-        })),
+        // Remove pack variants - each pack size is now a separate product
+        // packVariants: [],
       }
 
       await createProduct.mutate(payload as any)
@@ -340,14 +236,19 @@ export function ProductManagement() {
         barcode: '',
         price: undefined as any,
         cost: undefined as any,
-        minStockLevel: 0,
+        minStockLevel: 0, // Initial stock quantity
         unit: '',
         requiresPrescription: false,
         isActive: true,
         expiryDate: '',
         outletId: '',
         allowUnitSale: true,
-        packVariants: [],
+        // Reset new pack-based fields
+        packSize: 1,
+        genericName: '',
+        strength: '',
+        form: '',
+        brandName: '',
       })
       toast({ title: "Success", description: "Product created successfully" })
       fetchProducts()
@@ -548,12 +449,64 @@ export function ProductManagement() {
               <div className="grid gap-4 py-4 max-h-[400px] overflow-y-auto">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Product Name *</Label>
+                    <Label htmlFor="genericName">Generic Name *</Label>
                     <Input
-                      id="name"
-                      value={newProduct.name}
-                      onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
-                      placeholder="e.g., Paracetamol 500mg"
+                      id="genericName"
+                      value={newProduct.genericName}
+                      onChange={(e) => setNewProduct({...newProduct, genericName: e.target.value})}
+                      placeholder="e.g., Amoxicillin"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="strength">Strength *</Label>
+                    <Input
+                      id="strength"
+                      value={newProduct.strength}
+                      onChange={(e) => setNewProduct({...newProduct, strength: e.target.value})}
+                      placeholder="e.g., 500mg"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="form">Form *</Label>
+                    <Select value={newProduct.form} onValueChange={(value) => setNewProduct({...newProduct, form: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select form" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="tablets">Tablets</SelectItem>
+                        <SelectItem value="capsules">Capsules</SelectItem>
+                        <SelectItem value="syrup">Syrup</SelectItem>
+                        <SelectItem value="injection">Injection</SelectItem>
+                        <SelectItem value="cream">Cream</SelectItem>
+                        <SelectItem value="drops">Drops</SelectItem>
+                        <SelectItem value="powder">Powder</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="brandName">Brand Name</Label>
+                    <Input
+                      id="brandName"
+                      value={newProduct.brandName}
+                      onChange={(e) => setNewProduct({...newProduct, brandName: e.target.value})}
+                      placeholder="e.g., BrandX (optional)"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="packSize">Pack Size *</Label>
+                    <Input
+                      id="packSize"
+                      type="number"
+                      min="1"
+                      value={newProduct.packSize}
+                      onChange={(e) => setNewProduct({...newProduct, packSize: parseInt(e.target.value) || 1})}
+                      placeholder="e.g., 10"
                     />
                   </div>
                   <div className="space-y-2">
@@ -566,7 +519,7 @@ export function ProductManagement() {
                     />
                   </div>
                 </div>
-            <div className="space-y-2">
+                <div className="space-y-2">
               <Label htmlFor="outlet">Outlet *</Label>
               <Input id="outlet" value={newProduct.outletId || user?.outletId || ''} onChange={(e) => setNewProduct({ ...newProduct, outletId: e.target.value })} placeholder="Outlet ID" />
                 </div>
@@ -579,6 +532,23 @@ export function ProductManagement() {
                     placeholder="Product description"
                   />
                 </div>
+                
+                {/* Product Preview */}
+                {(newProduct.genericName || newProduct.strength || newProduct.packSize > 1) && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div className="text-sm font-medium text-blue-700 mb-2">Product Preview:</div>
+                    <div className="text-sm text-blue-600">
+                      <div className="font-medium">
+                        {newProduct.genericName || 'Generic Name'} {newProduct.strength || 'Strength'}
+                        {newProduct.brandName ? ` – ${newProduct.brandName}` : ''}
+                        {newProduct.packSize > 1 ? ` – Pack of ${newProduct.packSize} ${newProduct.form || 'units'}` : ''}
+                      </div>
+                      <div className="text-xs text-blue-500 mt-1">
+                        SKU: {newProduct.genericName ? `${newProduct.genericName.toUpperCase().replace(/[^A-Z0-9]+/g, '')}-${newProduct.strength?.replace(/[^A-Z0-9]+/g, '') || 'STRENGTH'}-${newProduct.packSize}` : 'Generated on save'}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="category">Category *</Label>
@@ -655,7 +625,7 @@ export function ProductManagement() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="minStockLevel">Min Stock Level</Label>
+                    <Label htmlFor="minStockLevel">Quantity in Stock</Label>
                     <Input
                       id="minStockLevel"
                       type="number"
@@ -675,182 +645,15 @@ export function ProductManagement() {
                   </div>
                 </div>
                 
-                {/* Pack Variants Section */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-sm font-medium">Pack Variants</Label>
-                      <p className="text-xs text-muted-foreground">Create pack options with volume discounts</p>
-                    </div>
-                    <div className="flex gap-2">
-                      {newProduct.price && newProduct.price > 0 && (
-                        <Button type="button" size="sm" variant="secondary" onClick={addSuggestedPacks}>
-                          <Package className="h-3 w-3 mr-1" />
-                          Add Suggested Packs
-                        </Button>
-                      )}
-                      <Button type="button" size="sm" variant="outline" onClick={addPackVariant}>
-                        <Plus className="h-3 w-3 mr-1" />
-                        Add Custom Pack
-                      </Button>
-                    </div>
+                {/* Pack-based Product Info */}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="text-sm font-medium text-green-700 mb-2">📦 Pack-Based Product System</div>
+                  <div className="text-xs text-green-600 space-y-1">
+                    <div>• Each pack size is created as a separate product</div>
+                    <div>• Product name includes pack size: "Amoxicillin 500mg – Pack of 10 tablets"</div>
+                    <div>• SKU includes pack size: "AMOX500-10"</div>
+                    <div>• Clear identification at POS for cashiers</div>
                   </div>
-                  
-                  {newProduct.packVariants?.map((variant, index) => {
-                    const savings = calculateSavings(variant.unitPrice, newProduct.price || 0)
-                    const validationErrors = validatePackVariant(variant, newProduct.price || 0)
-                    const hasErrors = validationErrors.length > 0
-                    
-                    return (
-                      <div key={index} className={`border rounded-lg p-3 space-y-3 ${hasErrors ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Label className="text-xs text-muted-foreground">Pack Variant {index + 1}</Label>
-                            {savings > 0 && (
-                              <Badge variant="secondary" className="text-xs">
-                                Save {savings}%
-                              </Badge>
-                            )}
-                            {hasErrors && (
-                              <Badge variant="destructive" className="text-xs">
-                                <AlertTriangle className="h-2 w-2 mr-1" />
-                                Errors
-                              </Badge>
-                            )}
-                          </div>
-                          <Button 
-                            type="button" 
-                            size="sm" 
-                            variant="ghost" 
-                            onClick={() => removePackVariant(index)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                        
-                        {/* Validation Errors */}
-                        {hasErrors && (
-                          <div className="bg-red-100 border border-red-200 rounded p-2">
-                            <div className="text-xs text-red-700 font-medium mb-1">Validation Errors:</div>
-                            {validationErrors.map((error, errorIndex) => (
-                              <div key={errorIndex} className="text-xs text-red-600">• {error}</div>
-                            ))}
-                          </div>
-                        )}
-                        
-                        {/* Pack Preview */}
-                        {variant.packSize > 0 && variant.packPrice > 0 && !hasErrors && (
-                          <div className="bg-blue-50 border border-blue-200 rounded p-2">
-                            <div className="text-xs text-blue-700 font-medium mb-1">POS Preview:</div>
-                            <div className="text-xs text-blue-600">
-                              {variant.name || `${variant.packSize}-pack`}: Le {variant.packPrice.toLocaleString('en-SL')} 
-                              <span className="ml-1">
-                                (Le {variant.unitPrice.toLocaleString('en-SL')} per unit)
-                              </span>
-                              {savings > 0 && (
-                                <span className="ml-1 text-green-600">- Save {savings}%</span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <Label htmlFor={`pack-name-${index}`} className="text-xs">Name (optional)</Label>
-                            <Input
-                              id={`pack-name-${index}`}
-                              value={variant.name || ''}
-                              onChange={(e) => updatePackVariant(index, 'name', e.target.value)}
-                              placeholder="e.g., 3-pack, dozen"
-                              className="text-sm"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label htmlFor={`pack-size-${index}`} className="text-xs">Pack Size *</Label>
-                            <Input
-                              id={`pack-size-${index}`}
-                              type="number"
-                              min="2"
-                              value={variant.packSize}
-                              onChange={(e) => updatePackVariant(index, 'packSize', parseInt(e.target.value) || 2)}
-                              placeholder="2"
-                              className="text-sm"
-                            />
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <Label htmlFor={`pack-price-${index}`} className="text-xs">Pack Price (Le) *</Label>
-                            <Input
-                              id={`pack-price-${index}`}
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={variant.packPrice}
-                              onChange={(e) => updatePackVariant(index, 'packPrice', parseFloat(e.target.value) || 0)}
-                              placeholder="0.00"
-                              className="text-sm"
-                            />
-                            <p className="text-xs text-muted-foreground">Total price for entire pack</p>
-                          </div>
-                          <div className="space-y-1">
-                            <Label htmlFor={`unit-price-${index}`} className="text-xs">Unit Price (Le) *</Label>
-                            <Input
-                              id={`unit-price-${index}`}
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={variant.unitPrice}
-                              onChange={(e) => updatePackVariant(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                              placeholder="0.00"
-                              className="text-sm"
-                            />
-                            <p className="text-xs text-muted-foreground">Price per unit within pack</p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            id={`pack-active-${index}`}
-                            checked={variant.isActive}
-                            onCheckedChange={(checked) => updatePackVariant(index, 'isActive', checked)}
-                          />
-                          <Label htmlFor={`pack-active-${index}`} className="text-xs">Active Pack Variant</Label>
-                        </div>
-                      </div>
-                    )
-                  })}
-                  
-                  {(!newProduct.packVariants || newProduct.packVariants.length === 0) && (
-                    <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-lg">
-                      <Package className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground mb-2">
-                        No pack variants added yet
-                      </p>
-                      <p className="text-xs text-muted-foreground mb-4">
-                        Create pack options with volume discounts for your customers
-                      </p>
-                      <div className="flex gap-2 justify-center">
-                        {newProduct.price && newProduct.price > 0 ? (
-                          <>
-                            <Button type="button" size="sm" variant="secondary" onClick={addSuggestedPacks}>
-                              <Package className="h-3 w-3 mr-1" />
-                              Add Suggested Packs
-                            </Button>
-                            <Button type="button" size="sm" variant="outline" onClick={addPackVariant}>
-                              <Plus className="h-3 w-3 mr-1" />
-                              Add Custom Pack
-                            </Button>
-                          </>
-                        ) : (
-                          <p className="text-xs text-amber-600">
-                            Set individual price first to enable pack suggestions
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 <div className="space-y-4">
@@ -1178,100 +981,15 @@ export function ProductManagement() {
                 </div>
               </div>
               
-              {/* Edit Pack Variants Section */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Pack Variants</Label>
-                  <Button type="button" size="sm" variant="outline" onClick={addEditPackVariant}>
-                    <Plus className="h-3 w-3 mr-1" />
-                    Add Pack
-                  </Button>
+              {/* Pack-based Product Info */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="text-sm font-medium text-green-700 mb-2">📦 Pack-Based Product System</div>
+                <div className="text-xs text-green-600 space-y-1">
+                  <div>• This product uses the new pack-based naming convention</div>
+                  <div>• Each pack size is a separate product</div>
+                  <div>• To create different pack sizes, create new products</div>
+                  <div>• Product name includes pack size for clear identification</div>
                 </div>
-                
-                {editingProduct.packVariants?.map((variant, index) => (
-                  <div key={index} className="border rounded-lg p-3 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs text-muted-foreground">Pack Variant {index + 1}</Label>
-                      <Button 
-                        type="button" 
-                        size="sm" 
-                        variant="ghost" 
-                        onClick={() => removeEditPackVariant(index)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor={`edit-pack-name-${index}`} className="text-xs">Name (optional)</Label>
-                        <Input
-                          id={`edit-pack-name-${index}`}
-                          value={variant.name || ''}
-                          onChange={(e) => updateEditPackVariant(index, 'name', e.target.value)}
-                          placeholder="e.g., 3-pack, dozen"
-                          className="text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`edit-pack-size-${index}`} className="text-xs">Pack Size *</Label>
-                        <Input
-                          id={`edit-pack-size-${index}`}
-                          type="number"
-                          min="1"
-                          value={variant.packSize}
-                          onChange={(e) => updateEditPackVariant(index, 'packSize', parseInt(e.target.value) || 1)}
-                          placeholder="1"
-                          className="text-sm"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor={`edit-pack-price-${index}`} className="text-xs">Pack Price (Le) *</Label>
-                        <Input
-                          id={`edit-pack-price-${index}`}
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={variant.packPrice}
-                          onChange={(e) => updateEditPackVariant(index, 'packPrice', parseFloat(e.target.value) || 0)}
-                          placeholder="0.00"
-                          className="text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`edit-unit-price-${index}`} className="text-xs">Unit Price (Le) *</Label>
-                        <Input
-                          id={`edit-unit-price-${index}`}
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={variant.unitPrice}
-                          onChange={(e) => updateEditPackVariant(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                          placeholder="0.00"
-                          className="text-sm"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id={`edit-pack-active-${index}`}
-                        checked={variant.isActive}
-                        onCheckedChange={(checked) => updateEditPackVariant(index, 'isActive', checked)}
-                      />
-                      <Label htmlFor={`edit-pack-active-${index}`} className="text-xs">Active Pack Variant</Label>
-                    </div>
-                  </div>
-                ))}
-                
-                {(!editingProduct.packVariants || editingProduct.packVariants.length === 0) && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No pack variants added. Click "Add Pack" to create pack options for this product.
-                  </p>
-                )}
               </div>
 
               <div className="space-y-4">

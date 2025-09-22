@@ -9,7 +9,11 @@ import {
   Home,
   Settings,
   User,
-  CreditCard
+  CreditCard,
+  BarChart3,
+  Clock,
+  DollarSign,
+  Plus
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -19,6 +23,11 @@ import { ShoppingCartMobile } from "@/components/cashier/shopping-cart-mobile"
 import { CustomerManagementMobile } from "@/components/cashier/customer-management-mobile"
 import { PaymentProcessingMobile } from "@/components/cashier/payment-processing-mobile"
 import { ReceiptMobile } from "@/components/cashier/receipt-mobile"
+import { StartShiftModal } from "@/components/cashier/start-shift-modal"
+import { EndShiftModal } from "@/components/cashier/end-shift-modal"
+import { ExpenseModal } from "@/components/cashier/expense-modal"
+import { MobileReports } from "@/components/cashier/mobile-reports"
+import { useShift } from "@/contexts/shift-context"
 import type { CartItem } from "@/app/cashier/page"
 
 interface Customer {
@@ -30,7 +39,7 @@ interface Customer {
 }
 
 type ViewState = "pos" | "payment" | "receipt"
-type TabState = "products" | "cart" | "customer"
+type TabState = "products" | "cart" | "customer" | "dashboard" | "reports"
 
 export function MobileCashierPage() {
   // All hooks must be called at the top level - never conditionally
@@ -40,6 +49,14 @@ export function MobileCashierPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [paymentData, setPaymentData] = useState<any>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  
+  // Shift management state
+  const [showStartShift, setShowStartShift] = useState(false)
+  const [showEndShift, setShowEndShift] = useState(false)
+  const [showExpense, setShowExpense] = useState(false)
+  
+  // Shift context
+  const { currentShift } = useShift()
 
   const addToCart = (product: any) => {
     const existingItem = cartItems.find(item => item.id === product.id)
@@ -177,9 +194,36 @@ export function MobileCashierPage() {
                 <div className="fixed left-0 top-0 h-full w-64 bg-white shadow-lg">
                   <div className="p-4">
                     <h2 className="text-lg font-semibold mb-4">Menu</h2>
+                    
+                    {/* Shift Status */}
+                    {currentShift ? (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Clock className="h-4 w-4 text-green-600" />
+                          <span className="text-sm font-medium text-green-700">Shift Active</span>
+                        </div>
+                        <div className="text-xs text-green-600">
+                          Started: {new Date(currentShift.startTime).toLocaleTimeString()}
+                        </div>
+                        <div className="text-xs text-green-600">
+                          Sales: Le {currentShift.totalSales.toLocaleString('en-SL')}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Clock className="h-4 w-4 text-red-600" />
+                          <span className="text-sm font-medium text-red-700">No Active Shift</span>
+                        </div>
+                        <div className="text-xs text-red-600">
+                          Start a shift to begin tracking
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="space-y-2">
                       <Button 
-                        variant="ghost" 
+                        variant={activeTab === "products" ? "default" : "ghost"}
                         className="w-full justify-start"
                         onClick={() => {
                           setActiveTab("products")
@@ -190,7 +234,7 @@ export function MobileCashierPage() {
                         Products
                       </Button>
                       <Button 
-                        variant="ghost" 
+                        variant={activeTab === "cart" ? "default" : "ghost"}
                         className="w-full justify-start"
                         onClick={() => {
                           setActiveTab("cart")
@@ -201,7 +245,7 @@ export function MobileCashierPage() {
                         Cart ({cartItemCount})
                       </Button>
                       <Button 
-                        variant="ghost" 
+                        variant={activeTab === "customer" ? "default" : "ghost"}
                         className="w-full justify-start"
                         onClick={() => {
                           setActiveTab("customer")
@@ -212,15 +256,73 @@ export function MobileCashierPage() {
                         Customer
                       </Button>
                       <Button 
-                        variant="ghost" 
+                        variant={activeTab === "dashboard" ? "default" : "ghost"}
                         className="w-full justify-start"
                         onClick={() => {
-                          window.location.href = "/dashboard"
+                          setActiveTab("dashboard")
+                          setSidebarOpen(false)
                         }}
                       >
                         <Home className="h-4 w-4 mr-2" />
                         Dashboard
                       </Button>
+                      <Button 
+                        variant={activeTab === "reports" ? "default" : "ghost"}
+                        className="w-full justify-start"
+                        onClick={() => {
+                          setActiveTab("reports")
+                          setSidebarOpen(false)
+                        }}
+                      >
+                        <BarChart3 className="h-4 w-4 mr-2" />
+                        Reports
+                      </Button>
+                    </div>
+                    
+                    {/* Shift Actions */}
+                    <div className="mt-6 pt-4 border-t">
+                      <div className="space-y-2">
+                        {!currentShift ? (
+                          <Button
+                            onClick={() => {
+                              setShowStartShift(true)
+                              setSidebarOpen(false)
+                            }}
+                            className="w-full"
+                            size="sm"
+                          >
+                            <Clock className="h-4 w-4 mr-2" />
+                            Start Shift
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              onClick={() => {
+                                setShowExpense(true)
+                                setSidebarOpen(false)
+                              }}
+                              variant="outline"
+                              className="w-full"
+                              size="sm"
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add Expense
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                setShowEndShift(true)
+                                setSidebarOpen(false)
+                              }}
+                              variant="destructive"
+                              className="w-full"
+                              size="sm"
+                            >
+                              <Clock className="h-4 w-4 mr-2" />
+                              End Shift
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -258,6 +360,90 @@ export function MobileCashierPage() {
                     selectedCustomer={selectedCustomer}
                     onSelectCustomer={setSelectedCustomer}
                   />
+                </div>
+              )}
+              
+              {activeTab === "dashboard" && (
+                <div className="p-4">
+                  <div className="space-y-4">
+                    <h2 className="text-lg font-semibold">Cashier Dashboard</h2>
+                    
+                    {/* Shift Status Card */}
+                    {currentShift ? (
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Clock className="h-5 w-5 text-green-600" />
+                            <span className="font-medium text-green-700">Active Shift</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <div className="text-muted-foreground">Started</div>
+                              <div className="font-medium">
+                                {new Date(currentShift.startTime).toLocaleTimeString()}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground">Duration</div>
+                              <div className="font-medium">
+                                {Math.floor((new Date().getTime() - new Date(currentShift.startTime).getTime()) / (1000 * 60 * 60))}h{' '}
+                                {Math.floor(((new Date().getTime() - new Date(currentShift.startTime).getTime()) % (1000 * 60 * 60)) / (1000 * 60))}m
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground">Sales</div>
+                              <div className="font-medium text-green-600">
+                                Le {currentShift.totalSales.toLocaleString('en-SL')}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground">Expenses</div>
+                              <div className="font-medium text-red-600">
+                                Le {currentShift.totalExpenses.toLocaleString('en-SL')}
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <Card>
+                        <CardContent className="p-4 text-center">
+                          <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-muted-foreground mb-3">No active shift</p>
+                          <Button onClick={() => setShowStartShift(true)}>
+                            Start Shift
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )}
+                    
+                    {/* Quick Actions */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowExpense(true)}
+                        disabled={!currentShift}
+                        className="h-20 flex-col"
+                      >
+                        <DollarSign className="h-6 w-6 mb-2" />
+                        <span className="text-sm">Add Expense</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveTab("reports")}
+                        className="h-20 flex-col"
+                      >
+                        <BarChart3 className="h-6 w-6 mb-2" />
+                        <span className="text-sm">View Reports</span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === "reports" && (
+                <div className="p-0">
+                  <MobileReports />
                 </div>
               )}
             </div>
@@ -340,5 +526,25 @@ export function MobileCashierPage() {
     }
   }
 
-  return renderCurrentView()
+  return (
+    <>
+      {renderCurrentView()}
+      
+      {/* Shift Management Modals */}
+      <StartShiftModal 
+        isOpen={showStartShift} 
+        onClose={() => setShowStartShift(false)} 
+      />
+      
+      <EndShiftModal 
+        isOpen={showEndShift} 
+        onClose={() => setShowEndShift(false)} 
+      />
+      
+      <ExpenseModal 
+        isOpen={showExpense} 
+        onClose={() => setShowExpense(false)} 
+      />
+    </>
+  )
 }

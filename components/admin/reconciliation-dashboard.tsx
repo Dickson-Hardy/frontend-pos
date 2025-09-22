@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { useToast } from "@/hooks/use-toast"
+import { apiClient } from "@/lib/api-unified"
 import { 
   DollarSign,
   TrendingUp,
@@ -62,6 +63,7 @@ export function ReconciliationDashboard() {
   const [reconciliations, setReconciliations] = useState<ReconciliationItem[]>([])
   const [summary, setSummary] = useState<ReconciliationSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [isExporting, setIsExporting] = useState(false)
   const [isNewReconciliationDialogOpen, setIsNewReconciliationDialogOpen] = useState(false)
 
@@ -124,117 +126,135 @@ export function ReconciliationDashboard() {
     })
   }
 
-  // Load actual reconciliation data from available APIs
+  // Load actual reconciliation data from API
   useEffect(() => {
     const loadReconciliations = async () => {
       try {
-        // Import API client dynamically
-        const { apiClient } = await import('@/lib/api-unified')
+        setIsLoading(true)
+        setError(null)
         
-        // Try to get sales and inventory data to construct reconciliation info
-        const [salesData, inventoryData] = await Promise.allSettled([
-          apiClient.sales.getDailySummary(),
-          apiClient.inventory.getStats()
+        // Fetch reconciliation data and summary using API client
+        const [reconciliationsData, summaryData] = await Promise.allSettled([
+          apiClient.reconciliation.getAll(),
+          apiClient.reconciliation.getSummary()
         ])
         
-        // Create mock reconciliation data based on actual API data
-        const recon1: ReconciliationItem = {
-          id: 'recon_1',
-          type: 'daily_cash',
-          status: 'completed',
-          performedBy: 'Admin User',
-          reconciliationDate: new Date(),
-          totalVariance: salesData.status === 'fulfilled' ? (salesData.value.totalSales * 0.02) : 50,
-          hasSignificantVariance: false,
-          outlet: 'Main Outlet'
+        if (reconciliationsData.status === 'fulfilled') {
+          // Transform API data to match our interface
+          const transformedReconciliations: ReconciliationItem[] = reconciliationsData.value.map((recon: any) => ({
+            id: recon._id || recon.id,
+            type: recon.type,
+            status: recon.status,
+            performedBy: recon.performedBy?.firstName && recon.performedBy?.lastName 
+              ? `${recon.performedBy.firstName} ${recon.performedBy.lastName}`
+              : 'Unknown User',
+            reconciliationDate: new Date(recon.reconciliationDate),
+            totalVariance: recon.totalVariance || 0,
+            hasSignificantVariance: recon.hasSignificantVariance || false,
+            outlet: recon.outletId?.name || 'Unknown Outlet'
+          }))
+          
+          setReconciliations(transformedReconciliations)
+        } else {
+          // Fallback to empty array if API fails
+          setReconciliations([])
         }
         
-        const recon2: ReconciliationItem = {
-          id: 'recon_2', 
-          type: 'inventory_count',
-          status: 'pending',
-          performedBy: 'Manager User',
-          reconciliationDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
-          totalVariance: inventoryData.status === 'fulfilled' ? (inventoryData.value.totalValue * 0.001) : 25,
-          hasSignificantVariance: false,
-          outlet: 'Main Outlet'
+        if (summaryData.status === 'fulfilled') {
+          // Use API summary data
+          setSummary({
+            totalReconciliations: summaryData.value.totalReconciliations || 0,
+            pendingApprovals: summaryData.value.pendingApprovals || 0,
+            significantVariances: summaryData.value.significantVariances || 0,
+            totalVarianceAmount: summaryData.value.totalVariance || 0,
+            avgVariance: summaryData.value.avgVariance || 0,
+            byType: summaryData.value.byType || {
+              daily_cash: 0,
+              shift_reconciliation: 0,
+              bank_reconciliation: 0,
+              inventory_count: 0
+            },
+            byStatus: summaryData.value.byStatus || {
+              pending: 0,
+              in_progress: 0,
+              completed: 0,
+              approved: 0,
+              variance_found: 0
+            }
+          })
+        } else {
+          // Calculate summary from reconciliation data
+          const reconciliations = reconciliationsData.status === 'fulfilled' ? reconciliationsData.value : []
+          const totalVariance = reconciliations.reduce((sum: number, r: any) => sum + (r.totalVariance || 0), 0)
+          const totalReconciliations = reconciliations.length
+          const pendingApprovals = reconciliations.filter((r: any) => r.status === 'pending').length
+          const significantVariances = reconciliations.filter((r: any) => r.hasSignificantVariance).length
+          const avgVariance = totalReconciliations ? totalVariance / totalReconciliations : 0
+
+          // Normalize types to expected keys
+          const typeKeyMap: Record<string, keyof ReconciliationSummary['byType']> = {
+            daily: 'daily_cash',
+            daily_cash: 'daily_cash',
+            shift_reconciliation: 'shift_reconciliation',
+            bank_reconciliation: 'bank_reconciliation',
+            inventory: 'inventory_count',
+            inventory_count: 'inventory_count',
+          }
+
+          const byTypeBase = { daily_cash: 0, shift_reconciliation: 0, bank_reconciliation: 0, inventory_count: 0 }
+          const byType = reconciliations.reduce((acc: any, r: any) => {
+            const key = typeKeyMap[r.type] || 'daily_cash'
+            acc[key] = (acc[key] || 0) + 1
+            return acc
+          }, { ...byTypeBase } as ReconciliationSummary['byType'])
+
+          const byStatusBase = { pending: 0, in_progress: 0, completed: 0, approved: 0, variance_found: 0 }
+          const byStatus = reconciliations.reduce((acc: any, r: any) => {
+            const key = (r.status || 'pending') as keyof ReconciliationSummary['byStatus']
+            acc[key] = (acc[key] || 0) + 1
+            return acc
+          }, { ...byStatusBase } as ReconciliationSummary['byStatus'])
+
+          setSummary({
+            totalReconciliations,
+            pendingApprovals,
+            significantVariances,
+            totalVarianceAmount: totalVariance,
+            avgVariance,
+            byType,
+            byStatus,
+          })
         }
-        
-        const mockReconciliations: ReconciliationItem[] = [recon1, recon2]
-        
-        setReconciliations(mockReconciliations)
-        
-        // Create summary from available data (align with interface)
-        const totalVariance = mockReconciliations.reduce((sum, r) => sum + (r.totalVariance || 0), 0)
-        const totalReconciliations = mockReconciliations.length
-        const pendingApprovals = mockReconciliations.filter(r => r.status === 'pending').length
-        const significantVariances = mockReconciliations.filter(r => r.hasSignificantVariance).length
-        const avgVariance = totalReconciliations ? totalVariance / totalReconciliations : 0
-
-        // Normalize types to expected keys
-        const typeKeyMap: Record<string, keyof ReconciliationSummary['byType']> = {
-          daily: 'daily_cash',
-          daily_cash: 'daily_cash',
-          shift_reconciliation: 'shift_reconciliation',
-          bank_reconciliation: 'bank_reconciliation',
-          inventory: 'inventory_count',
-          inventory_count: 'inventory_count',
-        }
-
-        const byTypeBase = { daily_cash: 0, shift_reconciliation: 0, bank_reconciliation: 0, inventory_count: 0 }
-        const byType = mockReconciliations.reduce((acc, r) => {
-          const key = typeKeyMap[r.type] || 'daily_cash'
-          acc[key] = (acc[key] || 0) + 1
-          return acc
-        }, { ...byTypeBase } as ReconciliationSummary['byType'])
-
-        const byStatusBase = { pending: 0, in_progress: 0, completed: 0, approved: 0, variance_found: 0 }
-        const byStatus = mockReconciliations.reduce((acc, r) => {
-          const key = (r.status || 'pending') as keyof ReconciliationSummary['byStatus']
-          acc[key] = (acc[key] || 0) + 1
-          return acc
-        }, { ...byStatusBase } as ReconciliationSummary['byStatus'])
-
-        setSummary({
-          totalReconciliations,
-          pendingApprovals,
-          significantVariances,
-          totalVarianceAmount: totalVariance,
-          avgVariance,
-          byType,
-          byStatus,
-        })
-        
       } catch (error) {
         console.error('Failed to load reconciliation data:', error)
-        // Keep default mock data on error
+        setError('Failed to load reconciliation data')
+        setReconciliations([])
+        setSummary({
+          totalReconciliations: 0,
+          pendingApprovals: 0,
+          significantVariances: 0,
+          totalVarianceAmount: 0,
+          avgVariance: 0,
+          byType: {
+            daily_cash: 0,
+            shift_reconciliation: 0,
+            bank_reconciliation: 0,
+            inventory_count: 0
+          },
+          byStatus: {
+            pending: 0,
+            in_progress: 0,
+            completed: 0,
+            approved: 0,
+            variance_found: 0
+          }
+        })
+      } finally {
+        setIsLoading(false)
       }
     }
     
     loadReconciliations()
-    
-    // For now, initialize with empty data
-    setReconciliations([])
-    setSummary({
-      totalReconciliations: 0,
-      pendingApprovals: 0,
-      significantVariances: 0,
-      totalVarianceAmount: 0,
-      avgVariance: 0,
-      byType: {
-        daily_cash: 0,
-        shift_reconciliation: 0,
-        bank_reconciliation: 0,
-        inventory_count: 0
-      },
-      byStatus: {
-        pending: 0,
-        in_progress: 0,
-        completed: 0,
-        approved: 0,
-        variance_found: 0
-      }
-    })
   }, [])
 
   const getStatusBadge = (status: string) => {

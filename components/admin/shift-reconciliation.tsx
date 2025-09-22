@@ -39,11 +39,12 @@ import {
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { formatSLL } from "@/lib/currency-utils"
+import { apiClient } from "@/lib/api-unified"
 
 interface ShiftSummary {
   shiftId: string
-  startTime: Date
-  endTime?: Date
+  startTime: string
+  endTime?: string
   cashier: {
     id: string
     name: string
@@ -163,31 +164,48 @@ export function ShiftReconciliation() {
   const loadCurrentShift = useCallback(async () => {
     setIsLoading(true)
     try {
-      // Fetch actual shift data from API
-      const { apiClient } = await import('@/lib/api-unified')
+      // Get current active shift using API client
+      const shift = await apiClient.shifts.getCurrent()
       
-      try {
-        // Try to get shift statistics if available
-        const shiftStats = await apiClient.shifts.getStats()
-        
-        // Create a mock current shift based on available data
-        const mockShift = {
-          id: selectedShift || 'current',
-          startTime: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), // 8 hours ago
-          endTime: null,
-          userId: 'current-user',
-          outletId: selectedOutlet,
-          status: 'active' as const,
-          salesCount: shiftStats.totalShiftsToday || 0,
-          totalSales: 0, // Would be calculated from sales data
+      if (shift) {
+        // Convert Shift to ShiftSummary format
+        const shiftSummary: ShiftSummary = {
+          shiftId: shift.id,
+          outlet: { id: shift.outletId, name: 'Unknown Outlet' },
+          startingCash: shift.openingBalance,
+          endingCash: shift.closingBalance || 0,
+          totalSales: shift.totalSales,
+          cashSales: shift.totalSales, // Assuming all sales are cash for now
+          creditCardSales: 0,
+          refunds: 0,
+          voids: 0,
+          transactionCount: 0, // This would need to be calculated from actual transactions
+          averageTransaction: 0,
+          status: shift.status as 'active' | 'pending_close' | 'closed' | 'reconciled',
+          startTime: shift.startTime,
+          endTime: shift.endTime,
+          cashier: { 
+            id: shift.cashierId, 
+            name: shift.cashier?.firstName && shift.cashier?.lastName 
+              ? `${shift.cashier.firstName} ${shift.cashier.lastName}` 
+              : 'Unknown Cashier', 
+            email: shift.cashier?.email || '' 
+          }
         }
-        
-        setCurrentShift(mockShift)
-        
+        setCurrentShift(shiftSummary)
         toast({
           title: "Shift Data Loaded",
-          description: `Active shift information loaded. ${shiftStats.activeShifts} active shifts found.`,
-      })
+          description: `Active shift information loaded for ${shift.cashier?.firstName || 'Unknown Cashier'}`,
+        })
+      } else {
+        // No active shift found
+        setCurrentShift(null)
+        toast({
+          title: "No Active Shift",
+          description: "No active shift found. Please start a shift first.",
+          variant: "destructive"
+        })
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -283,8 +301,11 @@ export function ShiftReconciliation() {
 
     setIsLoading(true)
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Complete handover via API using API client
+      await apiClient.shifts.handover(currentShift?.shiftId!, {
+        handoverData: handover,
+        notes: notes
+      })
 
       setHandover(prev => prev ? {
         ...prev,

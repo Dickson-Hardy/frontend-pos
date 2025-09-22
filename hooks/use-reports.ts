@@ -272,20 +272,46 @@ export function useTaxReport(params?: SalesReportParams) {
   const taxData = useMemo(() => {
     if (!report) return null
 
-    // Calculate tax breakdown from sales data
+    // Sierra Leone tax rates (as of 2024)
+    const TAX_RATES = {
+      'medicines': 0.0, // Medicines are typically tax-exempt
+      'medical_supplies': 0.15, // 15% GST for medical supplies
+      'general': 0.15, // 15% GST for general items
+      'prescription': 0.0, // Prescription medicines are tax-exempt
+      'otc': 0.15, // Over-the-counter medicines may have tax
+    }
+
+    // Calculate tax breakdown from sales data with proper tax rates
     const taxBreakdown = {
       totalTaxableAmount: report.totalSales,
-      totalTaxCollected: report.totalSales * 0.1, // Assuming 10% tax rate
-      taxByCategory: report.salesByCategory.map(category => ({
-        category: category.category,
-        taxableAmount: category.sales,
-        taxCollected: category.sales * 0.1,
-      })),
-      dailyTaxBreakdown: report.dailyBreakdown.map(day => ({
-        date: day.date,
-        taxableAmount: day.sales,
-        taxCollected: day.sales * 0.1,
-      })),
+      totalTaxCollected: report.salesByCategory.reduce((total, category) => {
+        const taxRate = TAX_RATES[category.category as keyof typeof TAX_RATES] || TAX_RATES.general
+        return total + (category.sales * taxRate)
+      }, 0),
+      taxByCategory: report.salesByCategory.map(category => {
+        const taxRate = TAX_RATES[category.category as keyof typeof TAX_RATES] || TAX_RATES.general
+        return {
+          category: category.category,
+          taxableAmount: category.sales,
+          taxCollected: category.sales * taxRate,
+          taxRate: taxRate * 100, // Convert to percentage
+        }
+      }),
+      dailyTaxBreakdown: report.dailyBreakdown.map(day => {
+        // For daily breakdown, use average tax rate
+        const avgTaxRate = report.salesByCategory.length > 0 
+          ? report.salesByCategory.reduce((sum, cat) => {
+              const rate = TAX_RATES[cat.category as keyof typeof TAX_RATES] || TAX_RATES.general
+              return sum + rate
+            }, 0) / report.salesByCategory.length
+          : TAX_RATES.general
+        
+        return {
+          date: day.date,
+          taxableAmount: day.sales,
+          taxCollected: day.sales * avgTaxRate,
+        }
+      }),
     }
 
     return taxBreakdown

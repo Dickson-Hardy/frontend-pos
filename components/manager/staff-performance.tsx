@@ -38,17 +38,62 @@ export function StaffPerformance() {
           ? usersData.filter(staff => staff.outletId === user.outletId && staff.role !== 'admin')
           : usersData.filter(staff => staff.role !== 'admin')
 
-        // Mock performance calculations - in real app this would come from sales/transaction data
-        const staffWithPerformance: StaffMember[] = outletStaff.map((staff, index) => ({
-          id: staff.id,
-          name: `${staff.firstName} ${staff.lastName}`,
-          role: staff.role,
-          sales: Math.floor(Math.random() * 5000) + 1000, // Mock sales data
-          transactions: Math.floor(Math.random() * 50) + 10, // Mock transaction count
-          avgTransactionValue: Math.floor(Math.random() * 200) + 50, // Mock avg transaction
-          performance: Math.floor(Math.random() * 40) + 60, // Mock performance 60-100%
-          status: staff.isActive ? 'active' : 'inactive',
-        }))
+        // Get real sales data for performance calculations
+        const salesData = await apiClient.sales.getAll({ 
+          outletId: user?.outletId,
+          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Last 30 days
+          endDate: new Date().toISOString().split('T')[0]
+        } as any)
+        
+        // Calculate performance metrics for each staff member
+        const staffPerformanceMap = new Map<string, {
+          sales: number
+          transactions: number
+          totalAmount: number
+        }>()
+        
+        salesData.forEach((sale: any) => {
+          if (sale.cashierId) {
+            const existing = staffPerformanceMap.get(sale.cashierId) || {
+              sales: 0,
+              transactions: 0,
+              totalAmount: 0
+            }
+            existing.sales += 1
+            existing.transactions += 1
+            existing.totalAmount += sale.total || 0
+            staffPerformanceMap.set(sale.cashierId, existing)
+          }
+        })
+        
+        // Calculate performance metrics for each staff member
+        const staffWithPerformance: StaffMember[] = outletStaff.map((staff) => {
+          const performance = staffPerformanceMap.get(staff.id) || {
+            sales: 0,
+            transactions: 0,
+            totalAmount: 0
+          }
+          
+          const avgTransactionValue = performance.transactions > 0 
+            ? performance.totalAmount / performance.transactions 
+            : 0
+          
+          // Calculate performance score based on sales volume and transaction count
+          const performanceScore = Math.min(100, Math.max(0, 
+            (performance.sales * 2) + (performance.transactions * 0.5) + (avgTransactionValue * 0.1)
+          ))
+          
+          return {
+            id: staff.id,
+            name: `${staff.firstName} ${staff.lastName}`,
+            role: staff.role,
+            sales: performance.sales,
+            transactions: performance.transactions,
+            avgTransactionValue: Math.round(avgTransactionValue),
+            performance: Math.round(performanceScore),
+            status: staff.isActive ? 'active' : 'inactive',
+          }
+        })
 
         setStaffData(staffWithPerformance)
       } catch (err) {

@@ -36,6 +36,7 @@ import {
   Upload
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { apiClient } from "@/lib/api-unified"
 
 interface CashCount {
   ten_thousand: number
@@ -371,8 +372,12 @@ export function CashReconciliation() {
 
     setIsLoading(true)
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Submit cash reconciliation via API using API client
+      await apiClient.reconciliation.submitDailyCash({
+        reconciliationData: reconciliation,
+        cashCount: reconciliation?.cashCount,
+        variance: reconciliation?.variance
+      })
       
       setReconciliation(prev => prev ? {
         ...prev,
