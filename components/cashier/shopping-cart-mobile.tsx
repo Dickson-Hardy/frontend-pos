@@ -33,12 +33,7 @@ export function ShoppingCartMobile({
 }: ShoppingCartMobileProps) {
   // All hooks must be called at the top level - never conditionally
   const { user } = useAuth()
-  const { items: inventoryItems, loading: inventoryLoading, error: inventoryError } = useInventory(user?.outletId)
-  
-  console.log('Mobile Shopping Cart - User:', user)
-  console.log('Mobile Shopping Cart - Outlet ID:', user?.outletId)
-  console.log('Mobile Shopping Cart - Inventory Loading:', inventoryLoading)
-  console.log('Mobile Shopping Cart - Inventory Error:', inventoryError)
+  const { items: inventoryItems } = useInventory(user?.outletId)
 
   // Function to get current stock for a product
   const getCurrentStock = (productId: string) => {
@@ -52,7 +47,7 @@ export function ShoppingCartMobile({
     console.log('Mobile cart item has stock field:', cartItem && 'stock' in cartItem)
     console.log('Mobile cart item stock value:', cartItem?.stock)
     
-    if (cartItem && 'stock' in cartItem && cartItem.stock !== undefined) {
+    if (cartItem && 'stock' in cartItem && cartItem.stock !== undefined && cartItem.stock > 0) {
       console.log('Mobile using cart item stock:', cartItem.stock)
       return cartItem.stock
     }
@@ -67,8 +62,8 @@ export function ShoppingCartMobile({
     const stock = inventoryItem?.stockQuantity || 0
     console.log('Mobile stock for product', productId, ':', stock)
     
-    // TEMPORARY WORKAROUND: If inventory is empty and no cart item stock, use a default value
-    if (stock === 0 && (!inventoryItems || inventoryItems.length === 0)) {
+    // TEMPORARY WORKAROUND: If both cart item and inventory show 0, use a default value
+    if (stock === 0 && (!cartItem?.stock || cartItem.stock === 0) && (!inventoryItems || inventoryItems.length === 0)) {
       console.log('Mobile using default stock value (workaround)')
       return 100 // Default stock for testing
     }

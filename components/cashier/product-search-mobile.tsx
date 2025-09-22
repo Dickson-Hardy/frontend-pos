@@ -101,6 +101,13 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
       }))
       
       console.log('Valid mobile products:', validProducts)
+      console.log('Mobile products with stock details:', validProducts.map(p => ({
+        id: p.id,
+        name: p.name,
+        stockQuantity: p.stockQuantity,
+        currentStock: p.currentStock,
+        price: p.price
+      })))
       setProducts(validProducts)
     } catch (err) {
       console.error('Failed to load mobile products:', err)
@@ -198,25 +205,27 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
 
   const handleAddToCart = (product: any) => {
     try {
-      const cartItem = {
+      const stockValue = product.currentStock || product.stockQuantity || 0
+      console.log('Mobile adding product to cart:', {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        stock: stockValue,
+        currentStock: product.currentStock,
+        stockQuantity: product.stockQuantity,
+        allFields: product
+      })
+      
+      onAddToCart({
         id: product.id,
         name: product.name,
         price: product.price,
         unit: product.unit,
-        stock: product.currentStock || product.stockQuantity || 0,
+        stock: stockValue,
         batchNumber: product.sku || product.barcode,
         expiryDate: "2025-12-31",
         category: product.category,
-      }
-      
-      console.log('Mobile adding to cart:', cartItem)
-      console.log('Mobile product stock fields:', {
-        currentStock: product.currentStock,
-        stockQuantity: product.stockQuantity,
-        finalStock: cartItem.stock
       })
-      
-      onAddToCart(cartItem)
       showSuccessToast(`${product.name} added to cart`)
     } catch (error) {
       showErrorToast("Failed to add product to cart")
