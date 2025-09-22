@@ -325,7 +325,7 @@ export function ProductManagement() {
 
     if (!matchesSearch) return false
 
-    if (activeTab === 'low-stock') return ((product as any).currentStock || 0) <= (product.minStockLevel || 0)
+    if (activeTab === 'low-stock') return (product.stockQuantity || (product as any).currentStock || 0) <= (product.reorderLevel || product.minStockLevel || 0)
     if (activeTab === 'expired') return !!(product as any).expiryDate && new Date((product as any).expiryDate) < new Date()
     if (activeTab === 'inactive') return !product.isActive
     // 'all'
@@ -333,8 +333,8 @@ export function ProductManagement() {
   })
 
   const getStockStatus = (product: Product) => {
-    const currentStock = (product as any).currentStock || 0
-    const minLevel = product.minStockLevel || 0
+    const currentStock = product.stockQuantity || (product as any).currentStock || 0
+    const minLevel = product.reorderLevel || product.minStockLevel || 0
     
     if (currentStock === 0) return { label: 'Out of Stock', variant: 'destructive' as const }
     if (currentStock <= minLevel) return { label: 'Low Stock', variant: 'secondary' as const }
@@ -732,7 +732,7 @@ export function ProductManagement() {
               <span className="text-sm font-medium">Low Stock</span>
             </div>
             <p className="text-2xl font-bold">
-              {sourceProducts.filter((p: Product) => ((p as any).currentStock || 0) <= (p.minStockLevel || 0)).length}
+              {sourceProducts.filter((p: Product) => (p.stockQuantity || (p as any).currentStock || 0) <= (p.reorderLevel || p.minStockLevel || 0)).length}
             </p>
             <p className="text-xs text-muted-foreground">Need reorder</p>
           </CardContent>
@@ -756,7 +756,7 @@ export function ProductManagement() {
               <span className="text-sm font-medium">Total Value</span>
             </div>
             <p className="text-2xl font-bold">
-              Le {sourceProducts.reduce((sum: number, p: Product) => sum + (((p as any).currentStock || 0) * (p.price || 0)), 0).toLocaleString('en-SL')}
+              Le {sourceProducts.reduce((sum: number, p: Product) => sum + ((p.stockQuantity || (p as any).currentStock || 0) * (p.sellingPrice || p.price || 0)), 0).toLocaleString('en-SL')}
             </p>
             <p className="text-xs text-muted-foreground">Inventory value</p>
           </CardContent>
@@ -783,7 +783,7 @@ export function ProductManagement() {
             <TabsList>
               <TabsTrigger value="all">All Products ({sourceProducts.length})</TabsTrigger>
               <TabsTrigger value="low-stock">
-                Low Stock ({sourceProducts.filter((p: Product) => ((p as any).currentStock || 0) <= (p.minStockLevel || 0)).length})
+                Low Stock ({sourceProducts.filter((p: Product) => (p.stockQuantity || (p as any).currentStock || 0) <= (p.reorderLevel || p.minStockLevel || 0)).length})
               </TabsTrigger>
               <TabsTrigger value="expired">
                 Expiring ({sourceProducts.filter((p: Product) => (p as any).expiryDate && new Date((p as any).expiryDate) < new Date(Date.now() + 30*24*60*60*1000)).length})
@@ -831,13 +831,13 @@ export function ProductManagement() {
                             <TableCell>{product.manufacturer || "N/A"}</TableCell>
                             <TableCell>
                               <div className="space-y-1">
-                                <p className="text-sm">{(product as any).currentStock || 0} {product.unit || 'units'}</p>
+                                <p className="text-sm">{product.stockQuantity || (product as any).currentStock || 0} {product.unitOfMeasure || product.unit || 'units'}</p>
                                 <Badge variant={stockStatus.variant} className="text-xs">
                                   {stockStatus.label}
                                 </Badge>
                               </div>
                             </TableCell>
-                            <TableCell>Le {product.price ? product.price.toLocaleString('en-SL') : 'N/A'}</TableCell>
+                            <TableCell>Le {(product.sellingPrice || product.price || 0).toLocaleString('en-SL')}</TableCell>
                             <TableCell>
                               <Badge variant={product.isActive ? "default" : "secondary"}>
                                 {product.isActive ? "Active" : "Inactive"}

@@ -140,6 +140,7 @@ export function PaymentProcessingMobile({
           totalPrice: Number(item.price * item.quantity),
           discount: Number(item.discount || 0),
           batchNumber: item.batchNumber,
+          packInfo: item.packInfo, // Include pack information for inventory deduction
         })),
         subtotal: Number(total),
         discount: Number(totalDiscount),

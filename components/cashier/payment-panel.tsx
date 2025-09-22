@@ -73,6 +73,7 @@ export function PaymentPanel({ items, total, customer, discounts, onBack, onPaym
           totalPrice: item.price * item.quantity,
           discount: item.discount || 0,
           batchNumber: item.batchNumber,
+          packInfo: item.packInfo, // Include pack information for inventory deduction
         })),
         subtotal: total,
         discount: 0, // Could be calculated from item discounts

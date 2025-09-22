@@ -39,6 +39,7 @@ export function MobileCashierPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [paymentData, setPaymentData] = useState<any>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const addToCart = (product: any) => {
     const existingItem = cartItems.find(item => item.id === product.id)
@@ -145,12 +146,16 @@ export function MobileCashierPage() {
         
       default: // "pos"
         return (
-          <div className="h-screen flex flex-col bg-background">
+          <div className="min-h-screen flex flex-col bg-background">
             {/* Header */}
-            <div className="bg-white border-b px-4 py-3 shadow-sm">
+            <div className="bg-white border-b px-4 py-3 shadow-sm sticky top-0 z-10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <Button variant="ghost" size="sm">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                  >
                     <Menu className="h-5 w-5" />
                   </Button>
                   <h1 className="text-lg font-semibold">Cashier POS</h1>
@@ -166,10 +171,66 @@ export function MobileCashierPage() {
               </div>
             </div>
 
+            {/* Sidebar */}
+            {sidebarOpen && (
+              <div className="fixed inset-0 z-20 bg-black bg-opacity-50" onClick={() => setSidebarOpen(false)}>
+                <div className="fixed left-0 top-0 h-full w-64 bg-white shadow-lg">
+                  <div className="p-4">
+                    <h2 className="text-lg font-semibold mb-4">Menu</h2>
+                    <div className="space-y-2">
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-start"
+                        onClick={() => {
+                          setActiveTab("products")
+                          setSidebarOpen(false)
+                        }}
+                      >
+                        <Search className="h-4 w-4 mr-2" />
+                        Products
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-start"
+                        onClick={() => {
+                          setActiveTab("cart")
+                          setSidebarOpen(false)
+                        }}
+                      >
+                        <ShoppingCart className="h-4 w-4 mr-2" />
+                        Cart ({cartItemCount})
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-start"
+                        onClick={() => {
+                          setActiveTab("customer")
+                          setSidebarOpen(false)
+                        }}
+                      >
+                        <Users className="h-4 w-4 mr-2" />
+                        Customer
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-start"
+                        onClick={() => {
+                          window.location.href = "/dashboard"
+                        }}
+                      >
+                        <Home className="h-4 w-4 mr-2" />
+                        Dashboard
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Main Content */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto">
               {activeTab === "products" && (
-                <div className="h-full p-4">
+                <div className="p-4">
                   <ProductSearchMobile 
                     onAddToCart={addToCart}
                   />
@@ -177,7 +238,7 @@ export function MobileCashierPage() {
               )}
               
               {activeTab === "cart" && (
-                <div className="h-full p-4 pb-20 overflow-y-auto">
+                <div className="p-4 pb-20">
                   <ShoppingCartMobile
                     items={cartItems}
                     onUpdateQuantity={updateQuantity}
@@ -192,7 +253,7 @@ export function MobileCashierPage() {
               )}
               
               {activeTab === "customer" && (
-                <div className="h-full p-4">
+                <div className="p-4">
                   <CustomerManagementMobile
                     selectedCustomer={selectedCustomer}
                     onSelectCustomer={setSelectedCustomer}
@@ -221,7 +282,7 @@ export function MobileCashierPage() {
             )}
 
             {/* Bottom Navigation */}
-            <div className="bg-white border-t px-4 py-2 safe-area-bottom">
+            <div className="bg-white border-t px-4 py-2 sticky bottom-0 z-10">
               <div className="flex justify-around">
                 <Button
                   variant={activeTab === "products" ? "default" : "ghost"}
