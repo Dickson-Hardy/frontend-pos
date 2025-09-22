@@ -67,14 +67,22 @@ export function PaymentPanel({ items, total, customer, discounts, onBack, onPaym
       const saleData = {
         items: items.map(item => ({
           productId: item.id,
+          productName: item.name,
           quantity: item.quantity,
           unitPrice: item.price,
+          totalPrice: item.price * item.quantity,
           discount: item.discount || 0,
-          batchId: item.batchNumber,
+          batchNumber: item.batchNumber,
         })),
+        subtotal: total,
         discount: 0, // Could be calculated from item discounts
+        tax: 0,
+        total: total,
         paymentMethod,
         outletId: user.outletId,
+        cashierId: user.id,
+        customerName: customer?.name,
+        customerPhone: customer?.phone,
       }
 
       // Create the sale

@@ -35,11 +35,15 @@ export const dataTransforms = {
     return saleNumber.toUpperCase()
   },
 
-  // Inventory transformations
-  getStockStatus: (item: InventoryItem): 'out_of_stock' | 'low_stock' | 'in_stock' | 'overstocked' => {
-    if (item.currentStock <= 0) return 'out_of_stock'
-    if (item.currentStock <= item.minimumStock) return 'low_stock'
-    if (item.currentStock >= item.maximumStock) return 'overstocked'
+  // Inventory transformations (updated for Product[] structure)
+  getStockStatus: (item: Product): 'out_of_stock' | 'low_stock' | 'in_stock' | 'overstocked' => {
+    const stockQuantity = item.stockQuantity ?? 0
+    const reorderLevel = item.reorderLevel ?? 0
+    const maxStockLevel = item.maxStockLevel ?? 1000
+    
+    if (stockQuantity <= 0) return 'out_of_stock'
+    if (stockQuantity <= reorderLevel) return 'low_stock'
+    if (stockQuantity >= maxStockLevel) return 'overstocked'
     return 'in_stock'
   },
 
@@ -53,8 +57,8 @@ export const dataTransforms = {
     }
   },
 
-  calculateStockValue: (item: InventoryItem): number => {
-    return item.currentStock * item.product.cost
+  calculateStockValue: (item: Product): number => {
+    return (item.stockQuantity ?? 0) * (item.costPrice ?? 0)
   },
 
   // Date transformations
@@ -272,15 +276,24 @@ export const dataValidations = {
       errors.push('Product name is required')
     }
 
-    if (typeof product.price !== 'number' || product.price <= 0) {
+    if (!product.description?.trim()) {
+      errors.push('Product description is required')
+    }
+
+    // Check for both old and new field names for backward compatibility
+    const price = (product as any).sellingPrice ?? (product as any).price
+    const cost = (product as any).costPrice ?? (product as any).cost
+    const unit = (product as any).unitOfMeasure ?? (product as any).unit
+
+    if (price === undefined || price === null || typeof price !== 'number' || price <= 0) {
       errors.push('Product price must be a positive number')
     }
 
-    if (typeof product.cost !== 'number' || product.cost < 0) {
+    if (cost === undefined || cost === null || typeof cost !== 'number' || cost < 0) {
       errors.push('Product cost must be a non-negative number')
     }
 
-    if (!product.unit?.trim()) {
+    if (!unit?.trim()) {
       errors.push('Product unit is required')
     }
 
@@ -489,28 +502,28 @@ export const dataAggregations = {
       .slice(0, limit)
   },
 
-  // Inventory aggregations
-  calculateTotalInventoryValue: (items: InventoryItem[]): number => {
-    return items.reduce((total, item) => total + dataTransforms.calculateStockValue(item), 0)
+  // Inventory aggregations (updated for Product[] structure)
+  calculateTotalInventoryValue: (items: Product[]): number => {
+    return items.reduce((total, item) => total + ((item.stockQuantity ?? 0) * (item.costPrice ?? 0)), 0)
   },
 
-  getLowStockItems: (items: InventoryItem[]): InventoryItem[] => {
-    return items.filter(item => dataTransforms.getStockStatus(item) === 'low_stock')
+  getLowStockItems: (items: Product[]): Product[] => {
+    return items.filter(item => (item.stockQuantity ?? 0) <= (item.reorderLevel ?? 0))
   },
 
-  getOutOfStockItems: (items: InventoryItem[]): InventoryItem[] => {
-    return items.filter(item => dataTransforms.getStockStatus(item) === 'out_of_stock')
+  getOutOfStockItems: (items: Product[]): Product[] => {
+    return items.filter(item => (item.stockQuantity ?? 0) <= 0)
   },
 
-  groupItemsByCategory: (items: InventoryItem[]): Record<string, InventoryItem[]> => {
+  groupItemsByCategory: (items: Product[]): Record<string, Product[]> => {
     return items.reduce((groups, item) => {
-      const category = item.product.category
+      const category = item.category
       if (!groups[category]) {
         groups[category] = []
       }
       groups[category].push(item)
       return groups
-    }, {} as Record<string, InventoryItem[]>)
+    }, {} as Record<string, Product[]>)
   },
 }
 

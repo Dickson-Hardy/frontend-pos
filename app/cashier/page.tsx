@@ -12,7 +12,10 @@ import { QuickActions } from "@/components/cashier/quick-actions"
 import { CustomerPanel } from "@/components/cashier/customer-panel"
 import { DiscountPanel } from "@/components/cashier/discount-panel"
 import { MobileCashierPage } from "@/components/cashier/mobile-pos-page"
+import { CashierDashboard } from "@/components/cashier/cashier-dashboard"
 import { PackVariant, SalePackInfo } from "@/lib/api-unified"
+import { Button } from "@/components/ui/button"
+import { Monitor, BarChart3 } from "lucide-react"
 
 export interface CartItem {
   id: string
@@ -53,6 +56,7 @@ function CashierContent() {
   // ALL HOOKS MUST BE CALLED AT THE TOP LEVEL - NEVER CONDITIONALLY
   const { user } = useAuth()
   const [isMobile, setIsMobile] = useState(false)
+  const [currentView, setCurrentView] = useState<'dashboard' | 'pos'>('dashboard')
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [showPayment, setShowPayment] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -133,14 +137,45 @@ function CashierContent() {
   return (
     <LayoutWrapper role="cashier">
       <Header 
-        title="Cashier POS" 
+        title="Cashier" 
         role="cashier" 
         userName={user ? `${user.firstName} ${user.lastName}` : "Cashier"} 
         outletName={user?.outlet?.name || "Pharmacy"} 
       />
 
-      {/* Mobile Layout - Single column with tabs */}
-      <div className="block lg:hidden h-[calc(100vh-80px)]">
+      {/* View Toggle Buttons */}
+      <div className="border-b border-border bg-card">
+        <div className="flex items-center justify-center p-4">
+          <div className="flex items-center space-x-2 bg-muted rounded-lg p-1">
+            <Button
+              variant={currentView === 'dashboard' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setCurrentView('dashboard')}
+              className="flex items-center space-x-2"
+            >
+              <BarChart3 className="h-4 w-4" />
+              <span>Dashboard</span>
+            </Button>
+            <Button
+              variant={currentView === 'pos' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setCurrentView('pos')}
+              className="flex items-center space-x-2"
+            >
+              <Monitor className="h-4 w-4" />
+              <span>POS</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      {currentView === 'dashboard' ? (
+        <CashierDashboard />
+      ) : (
+        <>
+          {/* Mobile Layout - Single column with tabs */}
+          <div className="block lg:hidden h-[calc(100vh-160px)]">
         <div className="p-2 space-y-2">
           <ProductSearch onAddToCart={addToCart} />
           <div className="grid grid-cols-1 gap-2">
@@ -173,8 +208,8 @@ function CashierContent() {
         </div>
       </div>
 
-      {/* Desktop Layout - Three column layout */}
-      <div className="hidden lg:flex h-[calc(100vh-80px)]">
+          {/* Desktop Layout - Three column layout */}
+          <div className="hidden lg:flex h-[calc(100vh-160px)]">
         {/* Left Panel - Product Search & Quick Actions */}
         <div className="flex-1 p-4 space-y-4 overflow-y-auto">
           <ProductSearch onAddToCart={addToCart} />
@@ -221,6 +256,8 @@ function CashierContent() {
           )}
         </div>
       </div>
+        </>
+      )}
     </LayoutWrapper>
   )
 }

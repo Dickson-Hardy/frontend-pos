@@ -11,7 +11,7 @@ import { showSuccessToast, showErrorToast } from "@/lib/toast-utils"
 import { useAuth } from "@/contexts/auth-context"
 import { BarcodeScanner } from "./barcode-scanner"
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner"
-import { apiClient } from "@/lib/api-client"
+import { apiClient } from "@/lib/api-unified"
 import type { Product } from "@/lib/api-unified"
 
 // Extended product type with inventory information
@@ -57,7 +57,7 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
     clearLastResult 
   } = useBarcodeScanner()
 
-  // Load products using direct API call - similar to desktop component
+  // Load products using inventory API - same as desktop component
   const loadProducts = React.useCallback(async () => {
     if (!user?.outletId) return
     
@@ -65,37 +65,39 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
       setLoading(true)
       setError(null)
       
-      const response = await apiClient.get(`/products?outlet=${user.outletId}&include=packVariants`)
+      console.log('Mobile loading products for outlet:', user.outletId)
+      const productsData = await apiClient.inventory.getItems(user.outletId)
       
-      console.log('Mobile API Response:', response.data)
+      console.log('Mobile Inventory API Response:', productsData)
       
-      let productsData = []
-      if (response.data?.products) {
-        productsData = response.data.products
-      } else if (Array.isArray(response.data)) {
-        productsData = response.data
-      } else {
-        productsData = []
+      // If no products found for specific outlet, try loading all products
+      let finalProducts = productsData
+      if (!productsData || productsData.length === 0) {
+        console.log('No products found for outlet, trying all products...')
+        finalProducts = await apiClient.inventory.getItems()
       }
       
       // Filter out any invalid products and add defaults
-      const validProducts = productsData.filter((product: any) => {
+      const validProducts = (finalProducts || []).filter((product: any) => {
         if (!product || typeof product !== 'object') {
           console.warn('Invalid mobile product:', product)
           return false
         }
-        // Check for either id or _id field
-        if ((!product.id && !product._id) || !product.name) {
+        if (!product.id || !product.name) {
           console.warn('Mobile product missing required fields:', product)
           return false
         }
         return true
       }).map((product: any) => ({
         ...product,
-        id: product.id || product._id, // Ensure consistent id field
-        price: product.price || 0,
-        unit: product.unit || 'unit',
-        category: product.category || 'Unknown'
+        id: product.id,
+        price: product.sellingPrice || product.price || 0,
+        unit: product.unitOfMeasure || product.unit || 'unit',
+        category: product.category || 'Unknown',
+        currentStock: product.stockQuantity || 0,
+        stockQuantity: product.stockQuantity || 0,
+        reorderLevel: product.reorderLevel || 0,
+        minimumStock: product.reorderLevel || 0
       }))
       
       console.log('Valid mobile products:', validProducts)
@@ -109,7 +111,7 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
     }
   }, [user?.outletId])
 
-  // Search products
+  // Search products using inventory API with local filtering
   const searchProducts = React.useCallback(async (term: string) => {
     if (!user?.outletId || term.length < 3) return
     
@@ -117,37 +119,53 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
       setLoading(true)
       setError(null)
       
-      const response = await apiClient.get(`/products/search?q=${encodeURIComponent(term)}&outlet=${user.outletId}&include=packVariants`)
+      console.log('Mobile searching products for outlet:', user.outletId, 'term:', term)
+      const productsData = await apiClient.inventory.getItems(user.outletId)
       
-      console.log('Mobile Search API Response:', response.data)
+      console.log('Mobile Search Inventory API Response:', productsData)
       
-      let productsData = []
-      if (response.data?.products) {
-        productsData = response.data.products
-      } else if (Array.isArray(response.data)) {
-        productsData = response.data
-      } else {
-        productsData = []
+      // If no products found for specific outlet, try loading all products
+      let finalProducts = productsData
+      if (!productsData || productsData.length === 0) {
+        console.log('No products found for outlet, trying all products...')
+        finalProducts = await apiClient.inventory.getItems()
       }
       
+      // Filter products locally based on search term
+      const filteredProducts = (finalProducts || []).filter((product: any) => {
+        const searchFields = [
+          product.name,
+          product.sku,
+          product.barcode,
+          product.genericName,
+          product.description,
+          product.category
+        ].filter(Boolean).join(' ').toLowerCase()
+        
+        return searchFields.includes(term.toLowerCase())
+      })
+      
       // Filter out any invalid products and add defaults
-      const validProducts = productsData.filter((product: any) => {
+      const validProducts = filteredProducts.filter((product: any) => {
         if (!product || typeof product !== 'object') {
           console.warn('Invalid mobile search product:', product)
           return false
         }
-        // Check for either id or _id field
-        if ((!product.id && !product._id) || !product.name) {
+        if (!product.id || !product.name) {
           console.warn('Mobile search product missing required fields:', product)
           return false
         }
         return true
       }).map((product: any) => ({
         ...product,
-        id: product.id || product._id, // Ensure consistent id field
-        price: product.price || 0,
-        unit: product.unit || 'unit',
-        category: product.category || 'Unknown'
+        id: product.id,
+        price: product.sellingPrice || product.price || 0,
+        unit: product.unitOfMeasure || product.unit || 'unit',
+        category: product.category || 'Unknown',
+        currentStock: product.stockQuantity || 0,
+        stockQuantity: product.stockQuantity || 0,
+        reorderLevel: product.reorderLevel || 0,
+        minimumStock: product.reorderLevel || 0
       }))
       
       console.log('Valid mobile search products:', validProducts)
@@ -180,7 +198,7 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
 
   const handleAddToCart = (product: any) => {
     try {
-      onAddToCart({
+      const cartItem = {
         id: product.id,
         name: product.name,
         price: product.price,
@@ -189,7 +207,16 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
         batchNumber: product.sku || product.barcode,
         expiryDate: "2025-12-31",
         category: product.category,
+      }
+      
+      console.log('Mobile adding to cart:', cartItem)
+      console.log('Mobile product stock fields:', {
+        currentStock: product.currentStock,
+        stockQuantity: product.stockQuantity,
+        finalStock: cartItem.stock
       })
+      
+      onAddToCart(cartItem)
       showSuccessToast(`${product.name} added to cart`)
     } catch (error) {
       showErrorToast("Failed to add product to cart")

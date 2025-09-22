@@ -37,7 +37,7 @@ function AdminPage() {
   const [activeView, setActiveView] = useState<AdminView>("overview")
   const { user, updateUser } = useAuth()
   const [outlets, setOutlets] = useState<Outlet[]>([])
-  const [selectedOutletId, setSelectedOutletId] = useState<string>(user?.outletId || "")
+  const [selectedOutletId, setSelectedOutletId] = useState<string>(user?.outletId || "all")
 
   useEffect(() => {
     const loadOutlets = async () => {
@@ -47,10 +47,10 @@ function AdminPage() {
         // Initialize selection from localStorage or user default
         if (typeof window !== 'undefined') {
           const saved = localStorage.getItem('selected_outlet_id')
-          if (saved && data.some(o => o.id === saved)) {
+          if (saved && (saved === 'all' || data.some(o => o.id === saved))) {
             setSelectedOutletId(saved)
-          } else if (!selectedOutletId && (user?.outletId || data[0]?.id)) {
-            setSelectedOutletId(user?.outletId || data[0]?.id || '')
+          } else if (!selectedOutletId) {
+            setSelectedOutletId(user?.outletId || 'all')
           }
         }
       } catch {}
@@ -59,12 +59,14 @@ function AdminPage() {
   }, [])
 
   useEffect(() => {
-    if (user && selectedOutletId && selectedOutletId !== user.outletId) {
+    if (!user) return
+    if (selectedOutletId === 'all') {
+      updateUser({ ...user, outletId: undefined as any, outlet: undefined as any })
+    } else if (selectedOutletId !== user.outletId) {
       updateUser({ ...user, outletId: selectedOutletId, outlet: outlets.find(o => o.id === selectedOutletId) as any })
-      // Persist outlet selection for session
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('selected_outlet_id', selectedOutletId)
-      }
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selected_outlet_id', selectedOutletId)
     }
   }, [selectedOutletId, user, outlets, updateUser])
 
@@ -111,9 +113,10 @@ function AdminPage() {
             <div className="w-64">
               <Select value={selectedOutletId} onValueChange={setSelectedOutletId}>
                 <SelectTrigger>
-                  <SelectValue placeholder={user?.outlet?.name || 'Select outlet'} />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all">All Outlets</SelectItem>
                   {outlets.map(o => (
                     <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
                   ))}

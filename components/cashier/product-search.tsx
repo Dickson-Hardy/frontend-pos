@@ -14,7 +14,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { BarcodeScanner } from "./barcode-scanner"
 import { ProductWithPacks } from "./product-with-packs"
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner"
-import { apiClient } from "@/lib/api-client"
+import { apiClient } from "@/lib/api-unified"
 import type { CartItem } from "@/app/cashier/page"
 import type { Product, InventoryItem } from "@/lib/api-unified"
 
@@ -57,21 +57,30 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
       setLoading(true)
       setError(null)
       
-      const response = await apiClient.get(`/products?outlet=${user.outletId}&include=packVariants`)
+      // Use inventory endpoint instead of products endpoint for better performance
+      console.log('Loading products for outlet:', user.outletId)
+      console.log('User object:', user)
+      const response = await apiClient.inventory.getItems(user.outletId)
       
-      console.log('API Response:', response.data)
+      console.log('Inventory API Response:', response)
+      console.log('Response length:', response?.length)
       
-      let productsData = []
-      if (response.data?.products) {
-        productsData = response.data.products
-      } else if (Array.isArray(response.data)) {
-        productsData = response.data
-      } else {
-        productsData = []
+      // If no products found for outlet, try loading all products
+      let productsToProcess = response
+      if (!response || response.length === 0) {
+        console.log('No products found for outlet, trying to load all products...')
+        try {
+          const allProductsResponse = await apiClient.inventory.getItems()
+          console.log('All products response:', allProductsResponse)
+          productsToProcess = allProductsResponse || []
+        } catch (fallbackError) {
+          console.error('Fallback also failed:', fallbackError)
+          productsToProcess = []
+        }
       }
       
       // Filter out any invalid products and add defaults
-      const validProducts = productsData.filter((product: any) => {
+      const validProducts = productsToProcess.filter((product: any) => {
         if (!product || typeof product !== 'object') {
           console.warn('Invalid product:', product)
           return false
@@ -85,16 +94,18 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
       }).map((product: any) => ({
         ...product,
         id: product.id || product._id, // Ensure consistent id field
-        price: product.price || 0,
-        unit: product.unit || 'unit',
-        category: product.category || 'Unknown'
+        price: product.sellingPrice || product.price || 0,
+        unit: product.unitOfMeasure || product.unit || 'unit',
+        category: product.category || 'Unknown',
+        currentStock: product.stockQuantity || 0,
+        reorderLevel: product.reorderLevel || 0
       }))
       
       console.log('Valid products:', validProducts)
       setProducts(validProducts)
     } catch (err) {
       console.error('Failed to load products:', err)
-      setError('Failed to load products')
+      setError('Failed to load products. Please try again.')
       setProducts([])
     } finally {
       setLoading(false)
@@ -109,21 +120,25 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
       setLoading(true)
       setError(null)
       
-      const response = await apiClient.get(`/products/search?q=${encodeURIComponent(term)}&outlet=${user.outletId}&include=packVariants`)
+      // Use inventory endpoint and filter locally for better performance
+      const response = await apiClient.inventory.getItems(user.outletId)
       
-      console.log('Search API Response:', response.data)
+      console.log('Search API Response:', response)
       
-      let productsData = []
-      if (response.data?.products) {
-        productsData = response.data.products
-      } else if (Array.isArray(response.data)) {
-        productsData = response.data
-      } else {
-        productsData = []
-      }
+      // Filter products locally by search term
+      const filteredProducts = response.filter((product: any) => {
+        const searchTerm = term.toLowerCase()
+        return (
+          product.name?.toLowerCase().includes(searchTerm) ||
+          product.sku?.toLowerCase().includes(searchTerm) ||
+          product.barcode?.toLowerCase().includes(searchTerm) ||
+          product.genericName?.toLowerCase().includes(searchTerm) ||
+          product.description?.toLowerCase().includes(searchTerm)
+        )
+      })
       
       // Filter out any invalid products and add defaults
-      const validProducts = productsData.filter((product: any) => {
+      const validProducts = filteredProducts.filter((product: any) => {
         if (!product || typeof product !== 'object') {
           console.warn('Invalid search product:', product)
           return false
@@ -137,16 +152,18 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
       }).map((product: any) => ({
         ...product,
         id: product.id || product._id, // Ensure consistent id field
-        price: product.price || 0,
-        unit: product.unit || 'unit',
-        category: product.category || 'Unknown'
+        price: product.sellingPrice || product.price || 0,
+        unit: product.unitOfMeasure || product.unit || 'unit',
+        category: product.category || 'Unknown',
+        currentStock: product.stockQuantity || 0,
+        reorderLevel: product.reorderLevel || 0
       }))
       
       console.log('Valid search products:', validProducts)
       setProducts(validProducts)
     } catch (err) {
       console.error('Failed to search products:', err)
-      setError('Failed to search products')
+      setError('Failed to search products. Please try again.')
       setProducts([])
     } finally {
       setLoading(false)

@@ -18,12 +18,19 @@ export function useInventory(outletId?: string) {
     refetch,
     mutate,
   } = useApi(
-    () => apiClient.inventory.getItems(outletId),
+    () => {
+      console.log('useInventory: Fetching items for outlet:', outletId)
+      return apiClient.inventory.getItems(outletId)
+    },
     {
       cacheKey: `inventory-items-${outletId || 'all'}`,
       cacheDuration: 1 * 60 * 1000, // 1 minute
     }
   )
+
+  console.log('useInventory: Raw data:', inventoryItems)
+  console.log('useInventory: Loading:', loading)
+  console.log('useInventory: Error:', error)
 
   // Filtered and sorted inventory items
   const filteredItems = useMemo(() => {
@@ -41,7 +48,7 @@ export function useInventory(outletId?: string) {
     // Apply category filter
     if (categoryFilter) {
       filtered = filtered.filter(item => 
-        item.product.category === categoryFilter
+        item.category === categoryFilter
       )
     }
 
@@ -51,10 +58,10 @@ export function useInventory(outletId?: string) {
 
       switch (sortBy) {
         case 'name':
-          comparison = a.product.name.localeCompare(b.product.name)
+          comparison = a.name.localeCompare(b.name)
           break
         case 'stock':
-          comparison = a.currentStock - b.currentStock
+          comparison = (a.stockQuantity ?? 0) - (b.stockQuantity ?? 0)
           break
         case 'value':
           comparison = dataTransforms.calculateStockValue(a) - dataTransforms.calculateStockValue(b)
@@ -77,7 +84,7 @@ export function useInventory(outletId?: string) {
   // Get unique categories
   const categories = useMemo(() => {
     if (!inventoryItems || !Array.isArray(inventoryItems)) return []
-    const categorySet = new Set(inventoryItems.map(item => item.product.category))
+    const categorySet = new Set(inventoryItems.map(item => item.category))
     return Array.from(categorySet).sort()
   }, [inventoryItems])
 
@@ -321,8 +328,8 @@ export function useLowStockAlerts(outletId?: string) {
         type: 'low_stock' as const,
         severity: 'warning' as const,
         title: 'Low Stock Alert',
-        message: `${item.product.name} is running low (${item.currentStock} remaining)`,
-        productId: item.productId,
+        message: `${item.name} is running low (${item.stockQuantity ?? 0} remaining)`,
+        productId: item.id,
         item,
       })
     })
@@ -334,8 +341,8 @@ export function useLowStockAlerts(outletId?: string) {
         type: 'out_of_stock' as const,
         severity: 'error' as const,
         title: 'Out of Stock Alert',
-        message: `${item.product.name} is out of stock`,
-        productId: item.productId,
+        message: `${item.name} is out of stock`,
+        productId: item.id,
         item,
       })
     })

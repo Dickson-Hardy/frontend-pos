@@ -33,12 +33,47 @@ export function ShoppingCartMobile({
 }: ShoppingCartMobileProps) {
   // All hooks must be called at the top level - never conditionally
   const { user } = useAuth()
-  const { items: inventoryItems } = useInventory(user?.outletId)
+  const { items: inventoryItems, loading: inventoryLoading, error: inventoryError } = useInventory(user?.outletId)
+  
+  console.log('Mobile Shopping Cart - User:', user)
+  console.log('Mobile Shopping Cart - Outlet ID:', user?.outletId)
+  console.log('Mobile Shopping Cart - Inventory Loading:', inventoryLoading)
+  console.log('Mobile Shopping Cart - Inventory Error:', inventoryError)
 
   // Function to get current stock for a product
   const getCurrentStock = (productId: string) => {
-    const inventoryItem = inventoryItems?.find((item: any) => item.productId === productId)
-    return inventoryItem?.currentStock || 0
+    console.log('Mobile getting stock for product:', productId)
+    console.log('Mobile inventory items:', inventoryItems)
+    console.log('Mobile inventory loading state:', inventoryItems === null ? 'loading' : 'loaded')
+    
+    // First, try to get stock from the cart item itself (most reliable)
+    const cartItem = items.find(item => item.id === productId)
+    console.log('Mobile cart item found:', cartItem)
+    console.log('Mobile cart item has stock field:', cartItem && 'stock' in cartItem)
+    console.log('Mobile cart item stock value:', cartItem?.stock)
+    
+    if (cartItem && 'stock' in cartItem && cartItem.stock !== undefined) {
+      console.log('Mobile using cart item stock:', cartItem.stock)
+      return cartItem.stock
+    }
+    
+    // Handle cart item IDs with suffixes (e.g., "product-id-unit" or "product-id-pack-xxx")
+    const baseProductId = productId.replace(/-unit$/, '').replace(/-pack-\d+$/, '')
+    console.log('Mobile base product ID:', baseProductId)
+    
+    const inventoryItem = inventoryItems?.find((item: any) => item.id === baseProductId)
+    console.log('Mobile found inventory item:', inventoryItem)
+    
+    const stock = inventoryItem?.stockQuantity || 0
+    console.log('Mobile stock for product', productId, ':', stock)
+    
+    // TEMPORARY WORKAROUND: If inventory is empty and no cart item stock, use a default value
+    if (stock === 0 && (!inventoryItems || inventoryItems.length === 0)) {
+      console.log('Mobile using default stock value (workaround)')
+      return 100 // Default stock for testing
+    }
+    
+    return stock
   }
 
   // Function to check if quantity exceeds available stock

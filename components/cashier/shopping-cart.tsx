@@ -32,12 +32,36 @@ export function ShoppingCart({
   total,
 }: ShoppingCartProps) {
   const { user } = useAuth()
-  const { data: inventoryItems } = useInventory(user?.outletId)
+  const { items: filteredInventory, allItems: inventoryItems, loading: inventoryLoading } = useInventory(user?.outletId)
 
   // Function to get current stock for a product
   const getCurrentStock = (productId: string) => {
-    const inventoryItem = inventoryItems?.find(item => item.productId === productId)
-    return inventoryItem?.currentStock || 0
+    console.log('Getting stock for product:', productId)
+    console.log('Inventory items:', inventoryItems)
+    console.log('Filtered inventory:', filteredInventory)
+    console.log('Inventory loading:', inventoryLoading)
+    
+    // Extract base product ID (remove -unit, -pack-xxx suffixes)
+    const baseProductId = productId.replace(/-unit$/, '').replace(/-pack-.*$/, '')
+    console.log('Base product ID:', baseProductId)
+    
+    // If inventory is still loading or empty, try to get stock from cart item itself
+    if (inventoryLoading || !inventoryItems || inventoryItems.length === 0) {
+      console.log('Inventory not available, checking cart item stock...')
+      const cartItem = items.find(item => item.id === productId)
+      if (cartItem && cartItem.stock !== undefined) {
+        console.log('Using cart item stock:', cartItem.stock)
+        return cartItem.stock
+      }
+    }
+    
+    const source = (inventoryItems && inventoryItems.length > 0) ? inventoryItems : filteredInventory
+    const inventoryItem = source?.find((item: any) => item.id === baseProductId)
+    console.log('Found inventory item:', inventoryItem)
+    
+    const stock = inventoryItem?.stockQuantity ?? 0
+    console.log('Stock for product', productId, '(base:', baseProductId, '):', stock)
+    return stock
   }
 
   // Function to check if quantity exceeds available stock

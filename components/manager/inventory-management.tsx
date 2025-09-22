@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { AlertTriangle, Package, Plus, Minus, RefreshCw } from "lucide-react"
-import { apiClient, InventoryItem, InventoryStats } from "@/lib/api-unified"
+import { AlertTriangle, Package, Plus, Minus, RefreshCw, Search, Camera, Filter } from "lucide-react"
+import { apiClient, Product, InventoryStats } from "@/lib/api-unified"
 import { useAuth } from "@/contexts/auth-context"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
@@ -17,7 +17,7 @@ import { BatchManagement } from "../admin/batch-management"
 export function InventoryManagement() {
   const { user } = useAuth()
   const [adjustmentReason, setAdjustmentReason] = useState("")
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
+  const [inventoryItems, setInventoryItems] = useState<Product[]>([])
   const [stats, setStats] = useState<InventoryStats>({ totalItems: 0, totalValue: 0, lowStockCount: 0, outOfStockCount: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -27,15 +27,23 @@ export function InventoryManagement() {
   const [pendingAdjustment, setPendingAdjustment] = useState<{ productId: string; newQuantity: number } | null>(null)
   const [isThresholdOpen, setIsThresholdOpen] = useState(false)
   const [thresholds, setThresholds] = useState<{ productId: string; reorderLevel: number; maxStockLevel: number; productName?: string } | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [barcodeInput, setBarcodeInput] = useState("")
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
 
   const fetchInventoryData = async () => {
     try {
       setLoading(true)
       setError(null)
       const [itemsData, statsData] = await Promise.all([
-        apiClient.inventory.getItems(user?.outletId),
-        apiClient.inventory.getStats(user?.outletId),
+        apiClient.inventory.getItems(user?.outletId || undefined),
+        apiClient.inventory.getStats(user?.outletId || undefined),
       ])
+      console.log('=== INVENTORY DATA DEBUG ===')
+      console.log('Items data:', itemsData)
+      console.log('First item:', itemsData[0])
+      console.log('First item keys:', itemsData[0] ? Object.keys(itemsData[0]) : 'No items')
+      console.log('=== END DEBUG ===')
       setInventoryItems(itemsData)
       setStats(statsData)
     } catch (err) {
@@ -63,23 +71,43 @@ export function InventoryManagement() {
     }
 
     try {
-      const currentItem = inventoryItems.find(item => item.productId === productId)
+      const currentItem = inventoryItems.find(item => item.id === productId)
       if (!currentItem) return
 
-      const quantityDiff = newQuantity - (currentItem.currentStock ?? 0)
+      const quantityDiff = newQuantity - (currentItem.stockQuantity ?? 0)
       if (quantityDiff === 0) return
-
-      await apiClient.inventory.adjust({
-        productId,
-        outletId: currentItem.outletId,
+      
+      const outletIdValue = typeof currentItem.outletId === 'string' 
+        ? currentItem.outletId 
+        : (currentItem.outletId as any)?.id || user?.outletId || ''
+      
+      const adjustmentType: 'increase' | 'decrease' = quantityDiff > 0 ? 'increase' : 'decrease'
+      
+      const payload: any = {
+        productId: currentItem.id,
+        outletId: outletIdValue,
         adjustedQuantity: quantityDiff,
-        reason: adjustmentReason,
-        adjustedBy: user?.id || "system",
-        type: quantityDiff > 0 ? 'increase' : 'decrease',
-      })
+        reason: adjustmentReason.trim(),
+        adjustedBy: user?.id || "000000000000000000000000", // Default ObjectId for system
+        type: adjustmentType,
+      }
+
+      console.log('Inventory adjustment payload:', payload)
+      await apiClient.inventory.adjust(payload as any)
       
       // Refresh data
-      await fetchInventoryData()
+      const [itemsData, statsData] = await Promise.all([
+        apiClient.inventory.getItems(user?.outletId || undefined),
+        apiClient.inventory.getStats(user?.outletId || undefined),
+      ])
+      setInventoryItems(itemsData)
+      setStats(statsData)
+      
+      // Debug: Check if the stock was updated
+      const updatedItem = itemsData.find(item => item.id === payload.productId)
+      console.log('After adjustment - Updated item:', updatedItem)
+      console.log('Expected new stock:', (updatedItem?.stockQuantity ?? 0) + quantityDiff)
+      
       setAdjustmentReason("")
       setAdjustments({})
       setIsReasonOpen(false)
@@ -95,12 +123,12 @@ export function InventoryManagement() {
     setIsReasonOpen(true)
   }
 
-  const openThresholdModal = (item: InventoryItem) => {
+  const openThresholdModal = (item: Product) => {
     setThresholds({
-      productId: item.productId,
-      reorderLevel: item.minimumStock ?? 0,
-      maxStockLevel: item.maximumStock ?? 0,
-      productName: item.product?.name,
+      productId: item.id,
+      reorderLevel: item.reorderLevel ?? 0,
+      maxStockLevel: item.maxStockLevel ?? 0,
+      productName: item.name,
     })
     setIsThresholdOpen(true)
   }
@@ -128,9 +156,72 @@ export function InventoryManagement() {
     }))
   }
 
-  const getStockStatus = (item: InventoryItem) => {
-    const currentStock = item.currentStock ?? 0
-    const minimumStock = item.minimumStock ?? 0
+  const handleBarcodeSearch = async () => {
+    if (!barcodeInput.trim()) return
+    
+    try {
+      // Search within the current inventory items first
+      const foundItem = inventoryItems.find(item => 
+        item.barcode === barcodeInput.trim()
+      )
+      
+      if (foundItem) {
+        // Scroll to the product in the list
+        const element = document.getElementById(`product-${foundItem.id}`)
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          element.classList.add('ring-2', 'ring-blue-500', 'ring-opacity-50')
+          setTimeout(() => {
+            element.classList.remove('ring-2', 'ring-blue-500', 'ring-opacity-50')
+          }, 3000)
+        }
+      } else {
+        // If not found in current inventory, try API search
+        const product = await apiClient.products.getByBarcode(barcodeInput)
+        if (product) {
+          // Find the inventory item for this product
+          const inventoryItem = inventoryItems.find(item => 
+            item.id === product.id
+          )
+          if (inventoryItem) {
+            // Scroll to the product in the list
+            const element = document.getElementById(`product-${product.id}`)
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              element.classList.add('ring-2', 'ring-blue-500', 'ring-opacity-50')
+              setTimeout(() => {
+                element.classList.remove('ring-2', 'ring-blue-500', 'ring-opacity-50')
+              }, 3000)
+            }
+          }
+        }
+      }
+      setBarcodeInput("")
+    } catch (error) {
+      console.error('Barcode search error:', error)
+    }
+  }
+
+  const filteredInventoryItems = inventoryItems.filter(item => {
+    const term = searchTerm.toLowerCase()
+    const productName = item.name || item.genericName || ''
+    const productId = item.id || ''
+    const barcode = item.barcode || ''
+    const sku = item.sku || ''
+    const description = item.description || ''
+    const manufacturer = item.manufacturer || ''
+    
+    return productName.toLowerCase().includes(term) ||
+           productId.toLowerCase().includes(term) ||
+           barcode.toLowerCase().includes(term) ||
+           sku.toLowerCase().includes(term) ||
+           description.toLowerCase().includes(term) ||
+           manufacturer.toLowerCase().includes(term)
+  })
+
+  const getStockStatus = (item: Product) => {
+    const currentStock = item.stockQuantity ?? 0
+    const minimumStock = item.reorderLevel ?? 0
     
     if (currentStock === 0) return { status: 'Out of Stock', variant: 'destructive' as const }
     if (currentStock <= minimumStock) return { status: 'Low Stock', variant: 'secondary' as const }
@@ -178,6 +269,50 @@ export function InventoryManagement() {
           </Button>
         </div>
       </div>
+
+      {/* Search and Barcode Section */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Search Input */}
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search products by name, ID, or barcode..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            
+            {/* Barcode Input */}
+            <div className="flex gap-2">
+              <div className="relative">
+                <Camera className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Scan barcode..."
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleBarcodeSearch()}
+                  className="pl-10 w-48"
+                />
+              </div>
+              <Button onClick={handleBarcodeSearch} disabled={!barcodeInput.trim()}>
+                <Camera className="h-4 w-4 mr-2" />
+                Scan
+              </Button>
+            </div>
+          </div>
+          
+          {searchTerm && (
+            <div className="mt-2 text-sm text-muted-foreground">
+              Showing {filteredInventoryItems.length} of {inventoryItems.length} products
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {error && (
         <Card>
@@ -232,29 +367,43 @@ export function InventoryManagement() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {inventoryItems.length === 0 ? (
+            {filteredInventoryItems.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No inventory items found
               </div>
             ) : (
-              inventoryItems.map((item) => {
+              filteredInventoryItems.map((item) => {
                 const stockStatus = getStockStatus(item)
-                const currentAdjustment = adjustments[item.productId] ?? item.currentStock ?? 0
+                const currentAdjustment = adjustments[item.id] ?? item.stockQuantity ?? 0
                 
                 return (
-                  <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div key={item.id} id={`product-${item.id}`} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex-1">
-                      <h3 className="font-medium">{item.product?.name || `Product ID: ${item.productId}`}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Current Stock: {item.currentStock ?? 0} | Min: {item.minimumStock ?? 0} | Max: {item.maximumStock ?? 0}
-                      </p>
-                      <Badge variant={stockStatus.variant}>{stockStatus.status}</Badge>
+                      <h3 className="font-medium text-lg">
+                        {item.name || item.genericName || `Product ID: ${item.id}`}
+                      </h3>
+                      {(item.description || item.genericName) && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {item.description || `${item.genericName} ${item.strength || ''}`.trim()}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                        <span>SKU: {item.sku || 'N/A'}</span>
+                        {item.barcode && <span>Barcode: {item.barcode}</span>}
+                        <span>Category: {item.category || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center gap-4 mt-2 text-sm">
+                        <span className="font-medium">Current Stock: {item.stockQuantity ?? 0}</span>
+                        <span>Min: {item.reorderLevel ?? 0}</span>
+                        <span>Max: {item.maxStockLevel ?? 0}</span>
+                        <Badge variant={stockStatus.variant}>{stockStatus.status}</Badge>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button 
                         size="sm" 
                         variant="outline"
-                        onClick={() => handleQuantityChange(item.productId, Math.max(0, currentAdjustment - 1))}
+                        onClick={() => handleQuantityChange(item.id, Math.max(0, currentAdjustment - 1))}
                       >
                         <Minus className="h-3 w-3" />
                       </Button>
@@ -263,23 +412,23 @@ export function InventoryManagement() {
                         type="number"
                         min="0"
                         value={currentAdjustment}
-                        onChange={(e) => handleQuantityChange(item.productId, parseInt(e.target.value) || 0)}
+                        onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value) || 0)}
                       />
                       <Button 
                         size="sm" 
                         variant="outline"
-                        onClick={() => handleQuantityChange(item.productId, currentAdjustment + 1)}
+                        onClick={() => handleQuantityChange(item.id, currentAdjustment + 1)}
                       >
                         <Plus className="h-3 w-3" />
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => openThresholdModal(item)}>
                         Edit thresholds
                       </Button>
-                      {currentAdjustment !== (item.currentStock ?? 0) && (
+                      {currentAdjustment !== (item.stockQuantity ?? 0) && (
                         <Button 
                           size="sm" 
                           className="bg-rose-600 hover:bg-rose-700"
-                          onClick={() => openReasonModal(item.productId, currentAdjustment)}
+                          onClick={() => openReasonModal(item.id, currentAdjustment)}
                         >
                           Apply
                         </Button>
@@ -297,14 +446,14 @@ export function InventoryManagement() {
                   <DialogDescription>Provide a reason to apply this change. This will be logged for audit.</DialogDescription>
                 </DialogHeader>
                 {pendingAdjustment && (() => {
-                  const item = inventoryItems.find(i => i.productId === pendingAdjustment.productId)
-                  const current = item?.currentStock ?? 0
+                  const item = inventoryItems.find(i => i.id === pendingAdjustment.productId)
+                  const current = item?.stockQuantity ?? 0
                   const diff = pendingAdjustment.newQuantity - current
                   return (
                     <div className="space-y-3">
                       <div>
                         <Label>Product</Label>
-                        <div className="mt-1 text-sm">{item?.product?.name || pendingAdjustment.productId}</div>
+                        <div className="mt-1 text-sm">{item?.name || pendingAdjustment.productId}</div>
                       </div>
                       <div className="grid grid-cols-3 gap-3 text-sm">
                         <div><Label>Current</Label><div className="mt-1">{current}</div></div>
@@ -313,10 +462,10 @@ export function InventoryManagement() {
                       </div>
                       <div>
                         <Label>Reason</Label>
-                        <Textarea
-                          placeholder="Enter reason for inventory adjustment..."
-                          value={adjustmentReason}
-                          onChange={(e) => setAdjustmentReason(e.target.value)}
+                <Textarea
+                  placeholder="Enter reason for inventory adjustment..."
+                  value={adjustmentReason}
+                  onChange={(e) => setAdjustmentReason(e.target.value)}
                         />
                       </div>
                       <div className="flex justify-end gap-2">
@@ -356,8 +505,8 @@ export function InventoryManagement() {
                       <Button variant="outline" onClick={() => setIsThresholdOpen(false)}>Cancel</Button>
                       <Button onClick={saveThresholds}>Save</Button>
                     </div>
-                  </div>
-                )}
+              </div>
+            )}
               </DialogContent>
             </Dialog>
           </div>

@@ -80,24 +80,41 @@ export interface Product {
   allowUnitSale: boolean // whether individual units can be sold
   createdAt: Date
   updatedAt: Date
+  // Backend field names for compatibility
+  sku?: string
+  genericName?: string
+  strength?: string
+  unitOfMeasure?: string
+  costPrice?: number
+  sellingPrice?: number
+  stockQuantity?: number
+  reorderLevel?: number
+  maxStockLevel?: number
 }
 
 export interface CreateProductDto {
   name: string
-  description?: string
+  sku: string
   barcode?: string
-  price: number
-  cost: number
-  unit: string
+  description: string
   category: string
-  manufacturer?: string
+  manufacturer: string
+  genericName: string
+  strength: string
+  unitOfMeasure: string
+  costPrice: number
+  sellingPrice: number
+  stockQuantity: number
+  reorderLevel: number
+  maxStockLevel: number
+  image?: string
   requiresPrescription: boolean
-  isActive?: boolean
-  minStockLevel?: number
-  expiryDate?: string
+  activeIngredients?: string[]
+  dosageInstructions?: string
+  storageInstructions?: string
   outletId: string
-  packVariants?: PackVariant[]
   allowUnitSale?: boolean
+  packVariants?: PackVariant[]
 }
 
 export interface UpdateProductDto extends Partial<CreateProductDto> {}
@@ -140,18 +157,28 @@ export interface SaleItem {
 }
 
 export interface CreateSaleDto {
-  customerId?: string
+  outletId: string
+  cashierId: string
   items: {
     productId: string
+    productName: string
     quantity: number
     unitPrice: number
+    totalPrice: number
+    batchNumber?: string
     discount?: number
-    batchId?: string
     packInfo?: SalePackInfo
   }[]
+  subtotal: number
   discount?: number
+  tax?: number
+  total: number
   paymentMethod: PaymentMethod
-  outletId: string
+  customerName?: string
+  customerPhone?: string
+  prescriptionNumber?: string
+  doctorName?: string
+  notes?: string
 }
 
 export type PaymentMethod = 'cash' | 'card' | 'mobile' | 'insurance'
@@ -167,6 +194,10 @@ export interface InventoryItem {
   reorderPoint: number
   outletId: string
   lastUpdated: Date
+  // Backend field names for compatibility
+  stockQuantity?: number
+  reorderLevel?: number
+  maxStockLevel?: number
 }
 
 export interface InventoryStats {
@@ -1228,9 +1259,9 @@ class UnifiedApiClient {
 
   // Inventory methods
   inventory = {
-    getItems: async (outletId?: string): Promise<InventoryItem[]> => {
+    getItems: async (outletId?: string): Promise<Product[]> => {
       const params = outletId ? { outletId } : {}
-      const response = await this.axiosInstance.get<InventoryItem[]>('/inventory/items', { params })
+      const response = await this.axiosInstance.get<Product[]>('/inventory/items', { params })
       return response.data
     },
 

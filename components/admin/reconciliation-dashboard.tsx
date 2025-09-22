@@ -138,28 +138,29 @@ export function ReconciliationDashboard() {
         ])
         
         // Create mock reconciliation data based on actual API data
-        const mockReconciliations = [
-          {
-            id: 'recon_1',
-            type: 'daily',
-            status: 'completed',
-            performedBy: 'Admin User',
-            reconciliationDate: new Date(),
-            totalVariance: salesData.status === 'fulfilled' ? (salesData.value.totalSales * 0.02) : 50,
-            hasSignificantVariance: false,
-            outlet: 'Main Outlet'
-          },
-          {
-            id: 'recon_2', 
-            type: 'inventory',
-            status: 'pending',
-            performedBy: 'Manager User',
-            reconciliationDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
-            totalVariance: inventoryData.status === 'fulfilled' ? (inventoryData.value.totalValue * 0.001) : 25,
-            hasSignificantVariance: false,
-            outlet: 'Main Outlet'
-          }
-        ]
+        const recon1: ReconciliationItem = {
+          id: 'recon_1',
+          type: 'daily_cash',
+          status: 'completed',
+          performedBy: 'Admin User',
+          reconciliationDate: new Date(),
+          totalVariance: salesData.status === 'fulfilled' ? (salesData.value.totalSales * 0.02) : 50,
+          hasSignificantVariance: false,
+          outlet: 'Main Outlet'
+        }
+        
+        const recon2: ReconciliationItem = {
+          id: 'recon_2', 
+          type: 'inventory_count',
+          status: 'pending',
+          performedBy: 'Manager User',
+          reconciliationDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
+          totalVariance: inventoryData.status === 'fulfilled' ? (inventoryData.value.totalValue * 0.001) : 25,
+          hasSignificantVariance: false,
+          outlet: 'Main Outlet'
+        }
+        
+        const mockReconciliations: ReconciliationItem[] = [recon1, recon2]
         
         setReconciliations(mockReconciliations)
         

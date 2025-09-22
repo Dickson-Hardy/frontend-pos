@@ -19,6 +19,25 @@ import { useToast } from "@/hooks/use-toast"
 import { apiClient, Product, CreateProductDto, PackVariant } from "@/lib/api-unified"
 import { useAuth } from "@/contexts/auth-context"
 
+// Form state interface for the UI
+interface ProductFormState {
+  name: string
+  description: string
+  category: string
+  manufacturer: string
+  barcode: string
+  price: number | undefined
+  cost: number | undefined
+  minStockLevel: number
+  unit: string
+  requiresPrescription: boolean
+  isActive: boolean
+  expiryDate: string
+  outletId: string
+  allowUnitSale: boolean
+  packVariants: PackVariant[]
+}
+
 export function ProductManagement() {
   const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
@@ -27,14 +46,14 @@ export function ProductManagement() {
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [activeTab, setActiveTab] = useState('all')
-  const [newProduct, setNewProduct] = useState<CreateProductDto>({
+  const [newProduct, setNewProduct] = useState<ProductFormState>({
     name: '',
     description: '',
     category: '',
     manufacturer: '',
     barcode: '',
-    price: 0,
-    cost: 0,
+    price: undefined as any,
+    cost: undefined as any,
     minStockLevel: 0,
     unit: '',
     requiresPrescription: false,
@@ -57,7 +76,7 @@ export function ProductManagement() {
     setLoading(true)
     setError(null)
     try {
-      const items = await apiClient.products.getAll(user?.outletId)
+      const items = await apiClient.products.getAll(user?.outletId || undefined)
       setProducts(items)
     } catch (e) {
       console.error('Failed to fetch products', e)
@@ -138,7 +157,82 @@ export function ProductManagement() {
 
   const handleAddProduct = async () => {
     try {
-      await createProduct.mutate(newProduct)
+      // Ensure outletId defaults to current outlet if not set
+      const outletId = newProduct.outletId || user?.outletId || ''
+      const name = newProduct.name?.trim() || ''
+      
+      // Generate or normalize required backend fields
+      const generatedSku = `${name.toUpperCase().replace(/[^A-Z0-9]+/g, '-').slice(0, 16)}-${Date.now().toString().slice(-4)}`
+      const strengthFromName = (() => {
+        const m = name.match(/(\d+\s?(mg|ml|g))/i)
+        return m ? m[0] : '1 unit'
+      })()
+      
+      // Map frontend category to backend enum
+      const normalizeCategory = (cat?: string) => {
+        if (!cat) return 'otc'
+        const map: Record<string, string> = {
+          'prescription': 'prescription',
+          'otc': 'otc',
+          'vitamins': 'vitamins',
+          'medical-devices': 'medical_equipment',
+          'medical_devices': 'medical_equipment',
+          'medical_equipment': 'medical_equipment',
+          'personal-care': 'personal_care',
+          'personal care': 'personal_care',
+          'personal_care': 'personal_care',
+          'first-aid': 'first_aid',
+          'first aid': 'first_aid',
+          'first_aid': 'first_aid',
+        }
+        const key = cat.toLowerCase()
+        return (map[key] || 'otc')
+      }
+      
+      // Map frontend unit to backend enum
+      const normalizeUnitOfMeasure = (unit?: string) => {
+        if (!unit) return 'pieces'
+        const map: Record<string, string> = {
+          'tablets': 'tablets',
+          'capsules': 'capsules',
+          'ml': 'ml',
+          'bottles': 'bottles',
+          'boxes': 'boxes',
+          'pieces': 'pieces',
+        }
+        const key = unit.toLowerCase()
+        return (map[key] || 'pieces')
+      }
+
+      // Build payload with exact backend DTO structure
+      const payload = {
+        name: name,
+        sku: generatedSku,
+        barcode: newProduct.barcode || '',
+        description: newProduct.description || 'No description provided',
+        category: normalizeCategory(newProduct.category),
+        manufacturer: newProduct.manufacturer || '',
+        genericName: name, // Use name as generic name
+        strength: strengthFromName,
+        unitOfMeasure: normalizeUnitOfMeasure(newProduct.unit),
+        costPrice: newProduct.cost ?? 0,
+        sellingPrice: newProduct.price ?? 0,
+        stockQuantity: 0,
+        reorderLevel: newProduct.minStockLevel || 10,
+        maxStockLevel: Math.max((newProduct.minStockLevel || 0) + 100, 100),
+        requiresPrescription: !!newProduct.requiresPrescription,
+        outletId: outletId,
+        allowUnitSale: newProduct.allowUnitSale !== false,
+        packVariants: (newProduct.packVariants || []).map((v: PackVariant) => ({
+          name: v.name || '',
+          packSize: v.packSize,
+          packPrice: v.packPrice,
+          unitPrice: v.unitPrice,
+          isActive: v.isActive !== false,
+        })),
+      }
+
+      await createProduct.mutate(payload as any)
       setIsAddDialogOpen(false)
       setNewProduct({
         name: '',
@@ -146,8 +240,8 @@ export function ProductManagement() {
         category: '',
         manufacturer: '',
         barcode: '',
-        price: 0,
-        cost: 0,
+        price: undefined as any,
+        cost: undefined as any,
         minStockLevel: 0,
         unit: '',
         requiresPrescription: false,
@@ -334,7 +428,12 @@ export function ProductManagement() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+            setIsAddDialogOpen(open)
+            if (open) {
+              setNewProduct(prev => ({ ...prev, outletId: prev.outletId || user?.outletId || '' }))
+            }
+          }}>
             <DialogTrigger asChild>
               <Button className="bg-rose-600 hover:bg-rose-700">
                 <Plus className="h-4 w-4 mr-2" />
@@ -349,7 +448,7 @@ export function ProductManagement() {
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4 max-h-[400px] overflow-y-auto">
-          <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Product Name *</Label>
                     <Input
@@ -360,7 +459,7 @@ export function ProductManagement() {
                     />
                   </div>
                   <div className="space-y-2">
-                <Label htmlFor="barcode">Barcode</Label>
+                    <Label htmlFor="barcode">Barcode</Label>
                     <Input
                       id="barcode"
                       value={newProduct.barcode}
@@ -372,9 +471,9 @@ export function ProductManagement() {
             <div className="space-y-2">
               <Label htmlFor="outlet">Outlet *</Label>
               <Input id="outlet" value={newProduct.outletId || user?.outletId || ''} onChange={(e) => setNewProduct({ ...newProduct, outletId: e.target.value })} placeholder="Outlet ID" />
-            </div>
+                </div>
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
+                    <Label htmlFor="description">Description *</Label>
                   <Textarea
                     id="description"
                     value={newProduct.description}
@@ -390,11 +489,21 @@ export function ProductManagement() {
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="prescription">Prescription Drugs</SelectItem>
-                        <SelectItem value="otc">Over-the-Counter</SelectItem>
-                        <SelectItem value="vitamins">Vitamins & Supplements</SelectItem>
-                        <SelectItem value="medical-devices">Medical Devices</SelectItem>
-                        <SelectItem value="personal-care">Personal Care</SelectItem>
+                        <SelectItem value="prescription">Prescription</SelectItem>
+                        <SelectItem value="otc">OTC</SelectItem>
+                        <SelectItem value="vitamins">Vitamins</SelectItem>
+                        <SelectItem value="medical_equipment">Medical Equipment</SelectItem>
+                        <SelectItem value="personal_care">Personal Care</SelectItem>
+                        <SelectItem value="first_aid">First Aid</SelectItem>
+                        <SelectItem value="pain_relief">Pain Relief</SelectItem>
+                        <SelectItem value="antibiotics">Antibiotics</SelectItem>
+                        <SelectItem value="cardiovascular">Cardiovascular</SelectItem>
+                        <SelectItem value="diabetes">Diabetes</SelectItem>
+                        <SelectItem value="gastrointestinal">Gastrointestinal</SelectItem>
+                        <SelectItem value="respiratory">Respiratory</SelectItem>
+                        <SelectItem value="mental_health">Mental Health</SelectItem>
+                        <SelectItem value="dermatology">Dermatology</SelectItem>
+                        <SelectItem value="supplements">Supplements</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -414,8 +523,8 @@ export function ProductManagement() {
                     <Input
                       id="price"
                       type="number"
-                      value={newProduct.price}
-                      onChange={(e) => setNewProduct({...newProduct, price: parseFloat(e.target.value) || 0})}
+                      value={newProduct.price || ''}
+                      onChange={(e) => setNewProduct({...newProduct, price: e.target.value ? parseFloat(e.target.value) : undefined})}
                       placeholder="0.00"
                     />
                   </div>
@@ -424,8 +533,8 @@ export function ProductManagement() {
                     <Input
                       id="costPrice"
                       type="number"
-                      value={newProduct.cost}
-                      onChange={(e) => setNewProduct({...newProduct, cost: parseFloat(e.target.value) || 0})}
+                      value={newProduct.cost || ''}
+                      onChange={(e) => setNewProduct({...newProduct, cost: e.target.value ? parseFloat(e.target.value) : undefined})}
                       placeholder="0.00"
                     />
                   </div>
@@ -790,7 +899,7 @@ export function ProductManagement() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="editDescription">Description</Label>
+                <Label htmlFor="editDescription">Description *</Label>
                 <Textarea
                   id="editDescription"
                   value={editingProduct.description || ''}
@@ -805,11 +914,21 @@ export function ProductManagement() {
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="prescription">Prescription Drugs</SelectItem>
-                      <SelectItem value="otc">Over-the-Counter</SelectItem>
-                      <SelectItem value="vitamins">Vitamins & Supplements</SelectItem>
-                      <SelectItem value="medical-devices">Medical Devices</SelectItem>
-                      <SelectItem value="personal-care">Personal Care</SelectItem>
+                      <SelectItem value="prescription">Prescription</SelectItem>
+                      <SelectItem value="otc">OTC</SelectItem>
+                      <SelectItem value="vitamins">Vitamins</SelectItem>
+                      <SelectItem value="medical_equipment">Medical Equipment</SelectItem>
+                      <SelectItem value="personal_care">Personal Care</SelectItem>
+                      <SelectItem value="first_aid">First Aid</SelectItem>
+                      <SelectItem value="pain_relief">Pain Relief</SelectItem>
+                      <SelectItem value="antibiotics">Antibiotics</SelectItem>
+                      <SelectItem value="cardiovascular">Cardiovascular</SelectItem>
+                      <SelectItem value="diabetes">Diabetes</SelectItem>
+                      <SelectItem value="gastrointestinal">Gastrointestinal</SelectItem>
+                      <SelectItem value="respiratory">Respiratory</SelectItem>
+                      <SelectItem value="mental_health">Mental Health</SelectItem>
+                      <SelectItem value="dermatology">Dermatology</SelectItem>
+                      <SelectItem value="supplements">Supplements</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
