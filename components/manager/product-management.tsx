@@ -106,12 +106,33 @@ export function ProductManagement() {
   }
 
   const updatePackVariant = (index: number, field: keyof PackVariant, value: any) => {
-    setNewProduct(prev => ({
-      ...prev,
-      packVariants: prev.packVariants?.map((variant, i) => 
-        i === index ? { ...variant, [field]: value } : variant
-      ) || []
-    }))
+    setNewProduct(prev => {
+      const updatedVariants = prev.packVariants?.map((variant, i) => {
+        if (i === index) {
+          const updatedVariant = { ...variant, [field]: value }
+          
+          // Auto-calculate related fields
+          if (field === 'packPrice' && updatedVariant.packSize > 0) {
+            // When pack price changes, auto-calculate unit price
+            updatedVariant.unitPrice = updatedVariant.packPrice / updatedVariant.packSize
+          } else if (field === 'unitPrice' && updatedVariant.packSize > 0) {
+            // When unit price changes, auto-calculate pack price
+            updatedVariant.packPrice = updatedVariant.unitPrice * updatedVariant.packSize
+          } else if (field === 'packSize' && updatedVariant.unitPrice > 0) {
+            // When pack size changes, auto-calculate pack price
+            updatedVariant.packPrice = updatedVariant.unitPrice * updatedVariant.packSize
+          }
+          
+          return updatedVariant
+        }
+        return variant
+      }) || []
+      
+      return {
+        ...prev,
+        packVariants: updatedVariants
+      }
+    })
   }
 
   const removePackVariant = (index: number) => {
@@ -119,6 +140,61 @@ export function ProductManagement() {
       ...prev,
       packVariants: prev.packVariants?.filter((_, i) => i !== index) || []
     }))
+  }
+
+  // Helper functions for pack variant calculations and validation
+  const calculateSavings = (unitPrice: number, individualPrice: number) => {
+    if (unitPrice >= individualPrice || individualPrice <= 0) return 0
+    return ((individualPrice - unitPrice) / individualPrice * 100).toFixed(1)
+  }
+
+  const validatePackVariant = (variant: PackVariant, individualPrice: number) => {
+    const errors = []
+    
+    if (variant.packSize <= 1) {
+      errors.push("Pack size must be greater than 1")
+    }
+    
+    if (variant.unitPrice > individualPrice) {
+      errors.push("Pack unit price cannot exceed individual price")
+    }
+    
+    const calculatedPackPrice = variant.unitPrice * variant.packSize
+    if (Math.abs(variant.packPrice - calculatedPackPrice) > 0.01) {
+      errors.push("Pack price doesn't match unit price × pack size")
+    }
+    
+    return errors
+  }
+
+  const suggestPackVariants = (individualPrice: number) => {
+    const suggestions = [
+      { packSize: 10, discountPercent: 15 },
+      { packSize: 20, discountPercent: 25 },
+      { packSize: 50, discountPercent: 35 },
+    ]
+    
+    return suggestions.map(suggestion => ({
+      packSize: suggestion.packSize,
+      unitPrice: individualPrice * (1 - suggestion.discountPercent / 100),
+      packPrice: individualPrice * suggestion.packSize * (1 - suggestion.discountPercent / 100),
+      name: `${suggestion.packSize}-pack`,
+      isActive: true,
+    }))
+  }
+
+  const addSuggestedPacks = () => {
+    if (!newProduct.price || newProduct.price <= 0) {
+      toast({ title: "Error", description: "Please set individual price first", variant: "destructive" })
+      return
+    }
+    
+    const suggestions = suggestPackVariants(newProduct.price)
+    setNewProduct(prev => ({
+      ...prev,
+      packVariants: [...(prev.packVariants || []), ...suggestions]
+    }))
+    toast({ title: "Success", description: "Added suggested pack variants" })
   }
 
   // Similar functions for editing product
@@ -157,6 +233,28 @@ export function ProductManagement() {
 
   const handleAddProduct = async () => {
     try {
+      // Validate pack variants before submission
+      const individualPrice = newProduct.price || 0
+      const packValidationErrors = []
+      
+      if (newProduct.packVariants && newProduct.packVariants.length > 0) {
+        newProduct.packVariants.forEach((variant, index) => {
+          const errors = validatePackVariant(variant, individualPrice)
+          if (errors.length > 0) {
+            packValidationErrors.push(`Pack Variant ${index + 1}: ${errors.join(', ')}`)
+          }
+        })
+      }
+      
+      if (packValidationErrors.length > 0) {
+        toast({ 
+          title: "Validation Error", 
+          description: packValidationErrors.join('; '), 
+          variant: "destructive" 
+        })
+        return
+      }
+
       // Ensure outletId defaults to current outlet if not set
       const outletId = newProduct.outletId || user?.outletId || ''
       const name = newProduct.name?.trim() || ''
@@ -580,96 +678,178 @@ export function ProductManagement() {
                 {/* Pack Variants Section */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">Pack Variants</Label>
-                    <Button type="button" size="sm" variant="outline" onClick={addPackVariant}>
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add Pack
-                    </Button>
+                    <div>
+                      <Label className="text-sm font-medium">Pack Variants</Label>
+                      <p className="text-xs text-muted-foreground">Create pack options with volume discounts</p>
+                    </div>
+                    <div className="flex gap-2">
+                      {newProduct.price && newProduct.price > 0 && (
+                        <Button type="button" size="sm" variant="secondary" onClick={addSuggestedPacks}>
+                          <Package className="h-3 w-3 mr-1" />
+                          Add Suggested Packs
+                        </Button>
+                      )}
+                      <Button type="button" size="sm" variant="outline" onClick={addPackVariant}>
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add Custom Pack
+                      </Button>
+                    </div>
                   </div>
                   
-                  {newProduct.packVariants?.map((variant, index) => (
-                    <div key={index} className="border rounded-lg p-3 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs text-muted-foreground">Pack Variant {index + 1}</Label>
-                        <Button 
-                          type="button" 
-                          size="sm" 
-                          variant="ghost" 
-                          onClick={() => removePackVariant(index)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label htmlFor={`pack-name-${index}`} className="text-xs">Name (optional)</Label>
-                          <Input
-                            id={`pack-name-${index}`}
-                            value={variant.name || ''}
-                            onChange={(e) => updatePackVariant(index, 'name', e.target.value)}
-                            placeholder="e.g., 3-pack, dozen"
-                            className="text-sm"
-                          />
+                  {newProduct.packVariants?.map((variant, index) => {
+                    const savings = calculateSavings(variant.unitPrice, newProduct.price || 0)
+                    const validationErrors = validatePackVariant(variant, newProduct.price || 0)
+                    const hasErrors = validationErrors.length > 0
+                    
+                    return (
+                      <div key={index} className={`border rounded-lg p-3 space-y-3 ${hasErrors ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs text-muted-foreground">Pack Variant {index + 1}</Label>
+                            {savings > 0 && (
+                              <Badge variant="secondary" className="text-xs">
+                                Save {savings}%
+                              </Badge>
+                            )}
+                            {hasErrors && (
+                              <Badge variant="destructive" className="text-xs">
+                                <AlertTriangle className="h-2 w-2 mr-1" />
+                                Errors
+                              </Badge>
+                            )}
+                          </div>
+                          <Button 
+                            type="button" 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={() => removePackVariant(index)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
-                        <div className="space-y-1">
-                          <Label htmlFor={`pack-size-${index}`} className="text-xs">Pack Size *</Label>
-                          <Input
-                            id={`pack-size-${index}`}
-                            type="number"
-                            min="1"
-                            value={variant.packSize}
-                            onChange={(e) => updatePackVariant(index, 'packSize', parseInt(e.target.value) || 1)}
-                            placeholder="1"
-                            className="text-sm"
+                        
+                        {/* Validation Errors */}
+                        {hasErrors && (
+                          <div className="bg-red-100 border border-red-200 rounded p-2">
+                            <div className="text-xs text-red-700 font-medium mb-1">Validation Errors:</div>
+                            {validationErrors.map((error, errorIndex) => (
+                              <div key={errorIndex} className="text-xs text-red-600">• {error}</div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Pack Preview */}
+                        {variant.packSize > 0 && variant.packPrice > 0 && !hasErrors && (
+                          <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                            <div className="text-xs text-blue-700 font-medium mb-1">POS Preview:</div>
+                            <div className="text-xs text-blue-600">
+                              {variant.name || `${variant.packSize}-pack`}: Le {variant.packPrice.toLocaleString('en-SL')} 
+                              <span className="ml-1">
+                                (Le {variant.unitPrice.toLocaleString('en-SL')} per unit)
+                              </span>
+                              {savings > 0 && (
+                                <span className="ml-1 text-green-600">- Save {savings}%</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label htmlFor={`pack-name-${index}`} className="text-xs">Name (optional)</Label>
+                            <Input
+                              id={`pack-name-${index}`}
+                              value={variant.name || ''}
+                              onChange={(e) => updatePackVariant(index, 'name', e.target.value)}
+                              placeholder="e.g., 3-pack, dozen"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor={`pack-size-${index}`} className="text-xs">Pack Size *</Label>
+                            <Input
+                              id={`pack-size-${index}`}
+                              type="number"
+                              min="2"
+                              value={variant.packSize}
+                              onChange={(e) => updatePackVariant(index, 'packSize', parseInt(e.target.value) || 2)}
+                              placeholder="2"
+                              className="text-sm"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label htmlFor={`pack-price-${index}`} className="text-xs">Pack Price (Le) *</Label>
+                            <Input
+                              id={`pack-price-${index}`}
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={variant.packPrice}
+                              onChange={(e) => updatePackVariant(index, 'packPrice', parseFloat(e.target.value) || 0)}
+                              placeholder="0.00"
+                              className="text-sm"
+                            />
+                            <p className="text-xs text-muted-foreground">Total price for entire pack</p>
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor={`unit-price-${index}`} className="text-xs">Unit Price (Le) *</Label>
+                            <Input
+                              id={`unit-price-${index}`}
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={variant.unitPrice}
+                              onChange={(e) => updatePackVariant(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                              placeholder="0.00"
+                              className="text-sm"
+                            />
+                            <p className="text-xs text-muted-foreground">Price per unit within pack</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id={`pack-active-${index}`}
+                            checked={variant.isActive}
+                            onCheckedChange={(checked) => updatePackVariant(index, 'isActive', checked)}
                           />
+                          <Label htmlFor={`pack-active-${index}`} className="text-xs">Active Pack Variant</Label>
                         </div>
                       </div>
-                      
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label htmlFor={`pack-price-${index}`} className="text-xs">Pack Price (Le) *</Label>
-                          <Input
-                            id={`pack-price-${index}`}
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={variant.packPrice}
-                            onChange={(e) => updatePackVariant(index, 'packPrice', parseFloat(e.target.value) || 0)}
-                            placeholder="0.00"
-                            className="text-sm"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor={`unit-price-${index}`} className="text-xs">Unit Price (Le) *</Label>
-                          <Input
-                            id={`unit-price-${index}`}
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={variant.unitPrice}
-                            onChange={(e) => updatePackVariant(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                            placeholder="0.00"
-                            className="text-sm"
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id={`pack-active-${index}`}
-                          checked={variant.isActive}
-                          onCheckedChange={(checked) => updatePackVariant(index, 'isActive', checked)}
-                        />
-                        <Label htmlFor={`pack-active-${index}`} className="text-xs">Active Pack Variant</Label>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                   
                   {(!newProduct.packVariants || newProduct.packVariants.length === 0) && (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No pack variants added. Click "Add Pack" to create pack options for this product.
-                    </p>
+                    <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-lg">
+                      <Package className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground mb-2">
+                        No pack variants added yet
+                      </p>
+                      <p className="text-xs text-muted-foreground mb-4">
+                        Create pack options with volume discounts for your customers
+                      </p>
+                      <div className="flex gap-2 justify-center">
+                        {newProduct.price && newProduct.price > 0 ? (
+                          <>
+                            <Button type="button" size="sm" variant="secondary" onClick={addSuggestedPacks}>
+                              <Package className="h-3 w-3 mr-1" />
+                              Add Suggested Packs
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" onClick={addPackVariant}>
+                              <Plus className="h-3 w-3 mr-1" />
+                              Add Custom Pack
+                            </Button>
+                          </>
+                        ) : (
+                          <p className="text-xs text-amber-600">
+                            Set individual price first to enable pack suggestions
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
 
