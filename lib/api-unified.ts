@@ -73,7 +73,7 @@ export interface Product {
   manufacturer?: string
   requiresPrescription: boolean
   isActive: boolean
-  minStockLevel?: number
+  minStockLevel?: number | undefined
   expiryDate?: string
   outletId: string
   packVariants?: PackVariant[] // multiple pack options for this product
@@ -574,9 +574,11 @@ export interface Shift {
 }
 
 export interface StartShiftDto {
-  cashierId: string
   openingBalance: number
-  outletId: string
+  notes?: string
+  // Optional on client; backend ignores/forbids these in body
+  cashierId?: string
+  outletId?: string
 }
 
 export interface EndShiftDto {

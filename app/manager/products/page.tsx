@@ -173,11 +173,11 @@ export default function ProductManagementPage() {
                   <div className="grid grid-cols-3 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="costPrice">Cost Price</Label>
-                      <Input id="costPrice" type="number" step="0.01" placeholder="0.00" />
+                      <Input id="costPrice" type="number" min="1" max="1500" step="0.01" placeholder="1.00 - 1500.00" />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="sellingPrice">Selling Price</Label>
-                      <Input id="sellingPrice" type="number" step="0.01" placeholder="0.00" />
+                      <Input id="sellingPrice" type="number" min="1" max="1500" step="0.01" placeholder="1.00 - 1500.00" />
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="initialStock">Initial Stock</Label>

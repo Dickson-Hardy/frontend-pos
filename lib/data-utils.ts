@@ -273,21 +273,19 @@ export const dataValidations = {
       errors.push('Product name is required')
     }
 
-    if (!product.description?.trim()) {
-      errors.push('Product description is required')
-    }
+    // Description is now optional - no validation needed
 
     // Check for both old and new field names for backward compatibility
     const price = (product as any).sellingPrice ?? (product as any).price
     const cost = (product as any).costPrice ?? (product as any).cost
     const unit = (product as any).unitOfMeasure ?? (product as any).unit
 
-    if (price === undefined || price === null || typeof price !== 'number' || price <= 0) {
-      errors.push('Product price must be a positive number')
+    if (price === undefined || price === null || typeof price !== 'number' || price < 1 || price > 1500) {
+      errors.push('Product price must be between 1 and 1500 Le')
     }
 
-    if (cost === undefined || cost === null || typeof cost !== 'number' || cost < 0) {
-      errors.push('Product cost must be a non-negative number')
+    if (cost === undefined || cost === null || typeof cost !== 'number' || cost < 1 || cost > 1500) {
+      errors.push('Product cost must be between 1 and 1500 Le')
     }
 
     if (!unit?.trim()) {

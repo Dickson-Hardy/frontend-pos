@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useInventory } from "@/hooks/use-inventory"
 import { useApi } from "@/hooks/use-api"
 import { apiClient } from "@/lib/api-unified"
+import { getOutletId } from "@/lib/user-utils"
 import { 
   Package, 
   TrendingUp, 
@@ -19,22 +20,23 @@ import {
 
 export function CashierDashboard() {
   const { user } = useAuth()
-  const { inventoryStats, loading: inventoryLoading } = useInventory(user?.outletId)
+  const outletId = getOutletId(user)
+  const { inventoryStats, loading: inventoryLoading } = useInventory(outletId)
   
   // Get today's sales data
   const { data: todaysSales, loading: salesLoading } = useApi(
-    () => apiClient.sales.getDailySummary(user?.outletId),
+    () => apiClient.sales.getDailySummary(outletId),
     {
-      cacheKey: `cashier-daily-sales-${user?.outletId || 'all'}`,
+      cacheKey: `cashier-daily-sales-${outletId || 'all'}`,
       cacheDuration: 30 * 1000, // 30 seconds
     }
   )
 
   // Get recent transactions
   const { data: recentSales, loading: recentSalesLoading } = useApi(
-    () => apiClient.sales.getAll({ outletId: user?.outletId }),
+    () => apiClient.sales.getAll({ outletId }),
     {
-      cacheKey: `cashier-recent-sales-${user?.outletId || 'all'}`,
+      cacheKey: `cashier-recent-sales-${outletId || 'all'}`,
       cacheDuration: 1 * 60 * 1000, // 1 minute
     }
   )

@@ -28,7 +28,7 @@ interface ProductFormState {
   barcode: string
   price: number | undefined
   cost: number | undefined
-  minStockLevel: number // This represents initial stock quantity
+  minStockLevel: number | undefined // This represents initial stock quantity
   unit: string
   requiresPrescription: boolean
   isActive: boolean
@@ -61,7 +61,7 @@ export function ProductManagement() {
     barcode: '',
     price: undefined as any,
     cost: undefined as any,
-    minStockLevel: 0, // Initial stock quantity
+    minStockLevel: undefined as any, // Initial stock quantity - user can input
     unit: '',
     requiresPrescription: false,
     isActive: true,
@@ -236,7 +236,7 @@ export function ProductManagement() {
         barcode: '',
         price: undefined as any,
         cost: undefined as any,
-        minStockLevel: 0, // Initial stock quantity
+        minStockLevel: undefined as any, // Initial stock quantity - user can input
         unit: '',
         requiresPrescription: false,
         isActive: true,
@@ -524,7 +524,7 @@ export function ProductManagement() {
               <Input id="outlet" value={newProduct.outletId || user?.outletId || ''} onChange={(e) => setNewProduct({ ...newProduct, outletId: e.target.value })} placeholder="Outlet ID" />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="description">Description *</Label>
+                    <Label htmlFor="description">Description (Optional)</Label>
                   <Textarea
                     id="description"
                     value={newProduct.description}
@@ -591,9 +591,12 @@ export function ProductManagement() {
                     <Input
                       id="price"
                       type="number"
+                      min="1"
+                      max="1500"
+                      step="0.01"
                       value={newProduct.price || ''}
                       onChange={(e) => setNewProduct({...newProduct, price: e.target.value ? parseFloat(e.target.value) : undefined})}
-                      placeholder="0.00"
+                      placeholder="1.00 - 1500.00"
                     />
                   </div>
                   <div className="space-y-2">
@@ -601,9 +604,12 @@ export function ProductManagement() {
                     <Input
                       id="costPrice"
                       type="number"
+                      min="1"
+                      max="1500"
+                      step="0.01"
                       value={newProduct.cost || ''}
                       onChange={(e) => setNewProduct({...newProduct, cost: e.target.value ? parseFloat(e.target.value) : undefined})}
-                      placeholder="0.00"
+                      placeholder="1.00 - 1500.00"
                     />
                   </div>
                   <div className="space-y-2">
@@ -629,9 +635,14 @@ export function ProductManagement() {
                     <Input
                       id="minStockLevel"
                       type="number"
-                      value={newProduct.minStockLevel}
-                      onChange={(e) => setNewProduct({...newProduct, minStockLevel: parseInt(e.target.value) || 0})}
-                      placeholder="0"
+                      min={0}
+                      value={newProduct.minStockLevel?.toString() || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const numValue = value ? parseInt(value) : undefined;
+                        setNewProduct(prev => ({...prev, minStockLevel: numValue}));
+                      }}
+                      placeholder="Enter quantity"
                     />
                   </div>
                   <div className="space-y-2">
@@ -967,7 +978,11 @@ export function ProductManagement() {
                     id="editMinStockLevel"
                     type="number"
                     value={editingProduct.minStockLevel || 0}
-                    onChange={(e) => setEditingProduct({...editingProduct, minStockLevel: parseInt(e.target.value) || 0})}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const numValue = value ? parseInt(value) : undefined;
+                      setEditingProduct({...editingProduct, minStockLevel: numValue});
+                    }}
                   />
                 </div>
                 <div className="space-y-2">

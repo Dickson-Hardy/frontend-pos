@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { useSaleMutations } from "@/hooks/use-sales"
 import { useAuth } from "@/contexts/auth-context"
 import { useShift } from "@/contexts/shift-context"
+import { getOutletId, getOutletIdFromStorage } from "@/lib/user-utils"
 import type { CartItem } from "@/app/cashier/page"
 import type { PaymentMethod } from "@/lib/api-unified"
 
@@ -112,20 +113,12 @@ export function PaymentProcessingMobile({
 
     // Resolve outletId from available sources and map payment method
     const backendPaymentMethod: PaymentMethod = paymentMethod === "mixed" ? "cash" : (paymentMethod as PaymentMethod)
-    const outletIdFromUser = user?.outletId || (user as any)?.outlet?._id || (user as any)?.outlet?.id
+    const outletIdFromUser = getOutletId(user)
     let outletIdToUse: string | undefined = outletIdFromUser
 
     if (!outletIdToUse) {
-      const storedUser = localStorage.getItem('user')
-      if (storedUser) {
-        try {
-          const parsedUser = JSON.parse(storedUser)
-          outletIdToUse = parsedUser?.outletId || parsedUser?.outlet?._id || parsedUser?.outlet?.id
-          console.log('Resolved outletId from storage:', outletIdToUse)
-        } catch (e) {
-          console.error('Failed to parse stored user:', e)
-        }
-      }
+      outletIdToUse = getOutletIdFromStorage()
+      console.log('Resolved outletId from storage:', outletIdToUse)
     }
 
     if (!outletIdToUse) {

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { useInventory } from "@/hooks/use-inventory"
 import { useAuth } from "@/contexts/auth-context"
 import { useShift } from "@/contexts/shift-context"
+import { getOutletId } from "@/lib/user-utils"
 import type { CartItem } from "@/app/cashier/page"
 
 interface ShoppingCartMobileProps {
@@ -34,7 +35,8 @@ export function ShoppingCartMobile({
 }: ShoppingCartMobileProps) {
   // All hooks must be called at the top level - never conditionally
   const { user } = useAuth()
-  const { items: inventoryItems } = useInventory(user?.outletId)
+  const outletId = getOutletId(user)
+  const { items: inventoryItems } = useInventory(outletId)
   const { currentShift } = useShift()
 
   // Function to get current stock for a product

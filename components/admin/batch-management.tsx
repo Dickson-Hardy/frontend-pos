@@ -208,11 +208,11 @@ export function BatchManagement() {
             </div>
             <div>
               <Label>Cost Price</Label>
-              <Input type="number" value={form.costPrice} onChange={e => setForm({ ...form, costPrice: parseFloat(e.target.value) || 0 })} />
+              <Input type="number" min="1" max="1500" step="0.01" value={form.costPrice} onChange={e => setForm({ ...form, costPrice: parseFloat(e.target.value) || 0 })} />
             </div>
             <div>
               <Label>Selling Price</Label>
-              <Input type="number" value={form.sellingPrice} onChange={e => setForm({ ...form, sellingPrice: parseFloat(e.target.value) || 0 })} />
+              <Input type="number" min="1" max="1500" step="0.01" value={form.sellingPrice} onChange={e => setForm({ ...form, sellingPrice: parseFloat(e.target.value) || 0 })} />
             </div>
             <div>
               <Label>Supplier Name</Label>

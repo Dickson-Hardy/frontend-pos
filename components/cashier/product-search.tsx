@@ -1,10 +1,10 @@
 "use client"
 
 import React, { useState } from "react"
-import { Search, Scan, Package, AlertTriangle } from "lucide-react"
+import { Search, Scan, Package, Grid3x3, Plus } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { SearchResultsSkeleton } from "@/components/ui/skeleton-loaders"
@@ -15,6 +15,8 @@ import { BarcodeScanner } from "./barcode-scanner"
 import { ProductWithPacks } from "./product-with-packs"
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner"
 import { apiClient } from "@/lib/api-unified"
+import { getOutletId } from "@/lib/user-utils"
+import { useInventory } from "@/hooks/use-inventory"
 import type { CartItem } from "@/app/cashier/page"
 import type { Product, InventoryItem } from "@/lib/api-unified"
 
@@ -24,7 +26,6 @@ type ProductWithStock = Product & {
   stockQuantity?: number
   reorderLevel?: number
   minimumStock?: number
-  inventory?: InventoryItem
 }
 
 interface ProductSearchProps {
@@ -33,10 +34,59 @@ interface ProductSearchProps {
 
 export function ProductSearch({ onAddToCart }: ProductSearchProps) {
   const { user } = useAuth()
+  const outletId = getOutletId(user)
   const [searchTerm, setSearchTerm] = useState("")
-  const [products, setProducts] = useState<ProductWithStock[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  
+  // Use inventory hook for automatic cache invalidation
+  const { items: inventoryItems, loading, error } = useInventory(outletId)
+  
+  // Convert inventory items to products with stock
+  const products: ProductWithStock[] = React.useMemo(() => {
+    if (!inventoryItems) return []
+    
+    return inventoryItems.map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      description: item.description || '',
+      barcode: item.barcode || '',
+      price: item.sellingPrice || item.price || 0,
+      cost: item.costPrice || item.cost || 0,
+      unit: item.unitOfMeasure || item.unit || 'unit',
+      category: item.category || 'Unknown',
+      manufacturer: item.manufacturer || '',
+      requiresPrescription: item.requiresPrescription || false,
+      isActive: true,
+      outletId: outletId || '',
+      allowUnitSale: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      currentStock: item.stockQuantity || 0,
+      stockQuantity: item.stockQuantity || 0,
+      reorderLevel: item.reorderLevel || 0,
+      minimumStock: item.reorderLevel || 0,
+      sku: item.sku || item.barcode,
+      batchNumber: item.sku || item.barcode,
+      expiryDate: item.expiryDate || '2025-12-31'
+    }))
+  }, [inventoryItems, outletId])
+  
+  // Filter products based on search term
+  const filteredProducts = React.useMemo(() => {
+    if (!searchTerm || searchTerm.length < 3) return products
+    
+    const term = searchTerm.toLowerCase()
+    return products.filter(product => {
+      const searchFields = [
+        product.name,
+        product.category,
+        product.manufacturer,
+        product.barcode,
+        product.sku
+      ].filter(Boolean).map(field => field?.toLowerCase()).filter(Boolean)
+      
+      return searchFields.some(field => field?.includes(term))
+    })
+  }, [products, searchTerm])
   
   // Barcode scanner functionality
   const { 
@@ -48,133 +98,27 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
     handleScan,
     clearLastResult 
   } = useBarcodeScanner()
-  
-  // Memoize loadProducts to prevent recreating on every render
-  const loadProductsMemoized = React.useCallback(async () => {
-    if (!user?.outletId) return
+
+  const handleAddToCart = (product: any) => {
+    const cartItem: Omit<CartItem, "quantity"> = {
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      unit: product.unit,
+      stock: product.currentStock || product.stockQuantity || 0,
+      batchNumber: product.batchNumber,
+      expiryDate: product.expiryDate,
+      category: product.category,
+      packInfo: {
+        saleType: 'unit',
+        unitQuantity: 1,
+        effectiveUnitCount: 1,
+      }
+    }
     
-    try {
-      setLoading(true)
-      setError(null)
-      
-      // Use inventory endpoint instead of products endpoint for better performance
-      console.log('Loading products for outlet:', user.outletId)
-      console.log('User object:', user)
-      const response = await apiClient.inventory.getItems(user.outletId)
-      
-      console.log('Inventory API Response:', response)
-      console.log('Response length:', response?.length)
-      
-      // Use only outlet-specific products - no fallback to all products
-      const productsToProcess = response || []
-      
-      // Filter out any invalid products and add defaults
-      const validProducts = productsToProcess.filter((product: any) => {
-        if (!product || typeof product !== 'object') {
-          console.warn('Invalid product:', product)
-          return false
-        }
-        // Check for either id or _id field
-        if ((!product.id && !product._id) || !product.name) {
-          console.warn('Product missing required fields:', product)
-          return false
-        }
-        return true
-      }).map((product: any) => ({
-        ...product,
-        id: product.id || product._id, // Ensure consistent id field
-        price: product.sellingPrice || product.price || 0,
-        unit: product.unitOfMeasure || product.unit || 'unit',
-        category: product.category || 'Unknown',
-        currentStock: product.stockQuantity || 0,
-        reorderLevel: product.reorderLevel || 0
-      }))
-      
-      console.log('Valid products:', validProducts)
-      setProducts(validProducts)
-    } catch (err) {
-      console.error('Failed to load products:', err)
-      setError('Failed to load products. Please try again.')
-      setProducts([])
-    } finally {
-      setLoading(false)
-    }
-  }, [user?.outletId])
-
-  // Memoize searchProducts to prevent recreating on every render
-  const searchProductsMemoized = React.useCallback(async (term: string) => {
-    if (!user?.outletId || term.length < 3) return
-    
-    try {
-      setLoading(true)
-      setError(null)
-      
-      // Use inventory endpoint and filter locally for better performance
-      const response = await apiClient.inventory.getItems(user.outletId)
-      
-      console.log('Search API Response:', response)
-      
-      // Filter products locally by search term
-      const filteredProducts = response.filter((product: any) => {
-        const searchTerm = term.toLowerCase()
-        return (
-          product.name?.toLowerCase().includes(searchTerm) ||
-          product.sku?.toLowerCase().includes(searchTerm) ||
-          product.barcode?.toLowerCase().includes(searchTerm) ||
-          product.genericName?.toLowerCase().includes(searchTerm) ||
-          product.description?.toLowerCase().includes(searchTerm)
-        )
-      })
-      
-      // Filter out any invalid products and add defaults
-      const validProducts = filteredProducts.filter((product: any) => {
-        if (!product || typeof product !== 'object') {
-          console.warn('Invalid search product:', product)
-          return false
-        }
-        // Check for either id or _id field
-        if ((!product.id && !product._id) || !product.name) {
-          console.warn('Search product missing required fields:', product)
-          return false
-        }
-        return true
-      }).map((product: any) => ({
-        ...product,
-        id: product.id || product._id, // Ensure consistent id field
-        price: product.sellingPrice || product.price || 0,
-        unit: product.unitOfMeasure || product.unit || 'unit',
-        category: product.category || 'Unknown',
-        currentStock: product.stockQuantity || 0,
-        reorderLevel: product.reorderLevel || 0
-      }))
-      
-      console.log('Valid search products:', validProducts)
-      setProducts(validProducts)
-    } catch (err) {
-      console.error('Failed to search products:', err)
-      setError('Failed to search products. Please try again.')
-      setProducts([])
-    } finally {
-      setLoading(false)
-    }
-  }, [user?.outletId])
-
-  // Load products on mount
-  React.useEffect(() => {
-    loadProductsMemoized()
-  }, [loadProductsMemoized])
-
-  // Handle search with debouncing
-  React.useEffect(() => {
-    if (searchTerm.length >= 3) {
-      const timeoutId = setTimeout(() => {
-        searchProductsMemoized(searchTerm)
-      }, 300)
-      return () => clearTimeout(timeoutId)
-    } else if (searchTerm.length === 0) {
-      loadProductsMemoized()
-    }
-  }, [searchTerm, loadProductsMemoized, searchProductsMemoized])
+    onAddToCart(cartItem)
+    showSuccessToast(`Added ${product.name} to cart`)
+  }
 
   const handleSearch = (term: string) => {
     setSearchTerm(term)
@@ -221,145 +165,73 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
 
   // Helper function to get stock information
   const getStockInfo = (product: ProductWithStock) => {
-    const stock = product.currentStock || product.stockQuantity || product.inventory?.currentStock || 0
-    const reorderLevel = product.reorderLevel || product.minimumStock || product.minStockLevel || product.inventory?.minimumStock || 0
-    return { stock, reorderLevel }
+    const stock = product.currentStock || product.stockQuantity || 0
+    const reorderLevel = product.reorderLevel || product.minimumStock || 0
+    const isLow = isLowStock(stock, reorderLevel)
+    
+    return {
+      stock,
+      reorderLevel,
+      isLow,
+      status: isLow ? 'low' : stock === 0 ? 'out' : 'good'
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'low': return 'bg-yellow-100 text-yellow-800'
+      case 'out': return 'bg-red-100 text-red-800'
+      default: return 'bg-green-100 text-green-800'
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'low': return 'Low Stock'
+      case 'out': return 'Out of Stock'
+      default: return 'In Stock'
+    }
   }
 
   if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Package className="h-5 w-5" />
-            <span>Product Search</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex space-x-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <div className="h-10 bg-muted animate-pulse rounded-md" />
-            </div>
-            <div className="h-10 w-10 bg-muted animate-pulse rounded-md" />
-          </div>
-          <SearchResultsSkeleton count={3} />
-        </CardContent>
-      </Card>
-    )
+    return <SearchResultsSkeleton />
   }
 
   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Package className="h-5 w-5" />
-            <span>Product Search</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8">
-            <p className="text-destructive mb-4">Failed to load products</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-            >
-              Retry
-            </button>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="text-center text-red-600 p-8">
+        <p>Failed to load products: {String(error)}</p>
+        <Button onClick={() => window.location.reload()} className="mt-4">
+          Retry
+        </Button>
+      </div>
     )
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Package className="h-5 w-5" />
-          <span>Product Search</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Search Input */}
-        <div className="flex space-x-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, category, SKU, or manufacturer..."
-              value={searchTerm}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={handleStartScanning}
-            disabled={scannerLoading}
-          >
-            <Scan className="h-4 w-4" />
-          </Button>
+    <div className="space-y-6">
+      {/* Search and Controls */}
+      <div className="flex gap-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search products by name, category, or barcode..."
+            value={searchTerm}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="pl-10"
+          />
         </div>
+        <Button
+          variant="outline"
+          onClick={handleStartScanning}
+          disabled={scannerLoading}
+        >
+          <Scan className="h-4 w-4 mr-2" />
+          Scan Barcode
+        </Button>
+      </div>
 
-        {/* Product Results */}
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {products && products.length > 0 ? (
-            products.map((product: ProductWithStock) => {
-              const { stock, reorderLevel } = getStockInfo(product)
-              
-              return (
-                <div
-                  key={product.id}
-                  className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <h4 className="font-semibold">{product.name}</h4>
-                      {isLowStock(stock, reorderLevel) && (
-                        <Badge variant="destructive" className="text-xs">
-                          <AlertTriangle className="h-3 w-3 mr-1" />
-                          Low Stock
-                        </Badge>
-                      )}
-                      {stock === 0 && (
-                        <Badge variant="destructive" className="text-xs">
-                          Out of Stock
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="text-sm text-muted-foreground space-y-1">
-                      <p>
-                        Price: Le {(product.price || 0).toLocaleString('en-SL')} per {product.unit || 'unit'}
-                      </p>
-                      <p>
-                        Stock: {stock} {product.unit || 'unit'}
-                      </p>
-                      <p>
-                        {product.barcode && `Barcode: ${product.barcode} | `}
-                        {product.manufacturer && `Manufacturer: ${product.manufacturer}`}
-                      </p>
-                    </div>
-                  </div>
-                  <ProductWithPacks
-                    product={product}
-                    onAddToCart={onAddToCart}
-                    stock={stock}
-                    reorderLevel={reorderLevel}
-                  />
-                </div>
-              )
-            })
-          ) : searchTerm.length > 2 ? (
-            <NoSearchResults searchTerm={searchTerm} />
-          ) : (
-            <NoProductsFound />
-          )}
-        </div>
-      </CardContent>
-      
-      {/* Barcode Scanner Modal */}
+      {/* Barcode Scanner */}
       {isScanning && (
         <BarcodeScanner
           isOpen={isScanning}
@@ -367,6 +239,77 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
           onClose={stopScanning}
         />
       )}
-    </Card>
+
+      {/* Products Grid */}
+      {filteredProducts.length === 0 ? (
+        searchTerm ? (
+          <NoSearchResults searchTerm={searchTerm} />
+        ) : (
+          <NoProductsFound />
+        )
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredProducts.map((product) => {
+            const stockInfo = getStockInfo(product)
+            
+            return (
+              <Card key={product.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-sm truncate">
+                          {product.name}
+                        </h3>
+                        <p className="text-xs text-gray-500 truncate">
+                          {product.category}
+                        </p>
+                        {product.manufacturer && (
+                          <p className="text-xs text-gray-400 truncate">
+                            {product.manufacturer}
+                          </p>
+                        )}
+                      </div>
+                      <Badge 
+                        variant="secondary" 
+                        className={getStatusColor(stockInfo.status)}
+                      >
+                        {getStatusText(stockInfo.status)}
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-green-600">
+                          Le {product.price.toLocaleString('en-SL')}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Stock: {stockInfo.stock}
+                        </p>
+                      </div>
+                      
+                      <Button
+                        size="sm"
+                        onClick={() => handleAddToCart(product)}
+                        disabled={stockInfo.stock === 0}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add
+                      </Button>
+                    </div>
+                    
+                    {product.barcode && (
+                      <p className="text-xs text-gray-400">
+                        Barcode: {product.barcode}
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }

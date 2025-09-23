@@ -12,6 +12,8 @@ import { useAuth } from "@/contexts/auth-context"
 import { BarcodeScanner } from "./barcode-scanner"
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner"
 import { apiClient } from "@/lib/api-unified"
+import { getOutletId } from "@/lib/user-utils"
+import { useInventory } from "@/hooks/use-inventory"
 import type { Product } from "@/lib/api-unified"
 
 // Extended product type with inventory information
@@ -41,11 +43,60 @@ interface ProductSearchMobileProps {
 export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSearchMobileProps) {
   // All hooks must be called at the top level - never conditionally
   const { user } = useAuth()
+  const outletId = getOutletId(user)
   const [searchTerm, setSearchTerm] = useState("")
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid')
-  const [products, setProducts] = useState<ProductWithStock[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  
+  // Use inventory hook for automatic cache invalidation
+  const { items: inventoryItems, loading, error } = useInventory(outletId)
+  
+  // Convert inventory items to products with stock
+  const products: ProductWithStock[] = React.useMemo(() => {
+    if (!inventoryItems) return []
+    
+    return inventoryItems.map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      description: item.description || '',
+      barcode: item.barcode || '',
+      price: item.sellingPrice || item.price || 0,
+      cost: item.costPrice || item.cost || 0,
+      unit: item.unitOfMeasure || item.unit || 'unit',
+      category: item.category || 'Unknown',
+      manufacturer: item.manufacturer || '',
+      requiresPrescription: item.requiresPrescription || false,
+      isActive: true,
+      outletId: outletId || '',
+      allowUnitSale: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      currentStock: item.stockQuantity || 0,
+      stockQuantity: item.stockQuantity || 0,
+      reorderLevel: item.reorderLevel || 0,
+      minimumStock: item.reorderLevel || 0,
+      sku: item.sku || item.barcode,
+      batchNumber: item.sku || item.barcode,
+      expiryDate: item.expiryDate || '2025-12-31'
+    }))
+  }, [inventoryItems, outletId])
+  
+  // Filter products based on search term
+  const filteredProducts = React.useMemo(() => {
+    if (!searchTerm || searchTerm.length < 3) return products
+    
+    const term = searchTerm.toLowerCase()
+    return products.filter(product => {
+      const searchFields = [
+        product.name,
+        product.category,
+        product.manufacturer,
+        product.barcode,
+        product.sku
+      ].filter(Boolean).map(field => field?.toLowerCase()).filter(Boolean)
+      
+      return searchFields.some(field => field?.includes(term))
+    })
+  }, [products, searchTerm])
   
   // Barcode scanner functionality
   const { 
@@ -57,175 +108,20 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
     clearLastResult 
   } = useBarcodeScanner()
 
-  // Load products using inventory API - same as desktop component
-  const loadProducts = React.useCallback(async () => {
-    if (!user?.outletId) return
-    
-    try {
-      setLoading(true)
-      setError(null)
-      
-      console.log('Mobile loading products for outlet:', user.outletId)
-      const productsData = await apiClient.inventory.getItems(user.outletId)
-      
-      console.log('Mobile Inventory API Response:', productsData)
-      
-      // Use only outlet-specific products - no fallback to all products
-      const finalProducts = productsData || []
-      
-      // Filter out any invalid products and add defaults
-      const validProducts = (finalProducts || []).filter((product: any) => {
-        if (!product || typeof product !== 'object') {
-          console.warn('Invalid mobile product:', product)
-          return false
-        }
-        if (!product.id || !product.name) {
-          console.warn('Mobile product missing required fields:', product)
-          return false
-        }
-        return true
-      }).map((product: any) => ({
-        ...product,
-        id: product.id,
-        price: product.sellingPrice || product.price || 0,
-        unit: product.unitOfMeasure || product.unit || 'unit',
-        category: product.category || 'Unknown',
-        currentStock: product.stockQuantity || 0,
-        stockQuantity: product.stockQuantity || 0,
-        reorderLevel: product.reorderLevel || 0,
-        minimumStock: product.reorderLevel || 0
-      }))
-      
-      console.log('Valid mobile products:', validProducts)
-      console.log('Mobile products with stock details:', validProducts.map(p => ({
-        id: p.id,
-        name: p.name,
-        stockQuantity: p.stockQuantity,
-        currentStock: p.currentStock,
-        price: p.price
-      })))
-      setProducts(validProducts)
-    } catch (err) {
-      console.error('Failed to load mobile products:', err)
-      setError('Failed to load products')
-      setProducts([])
-    } finally {
-      setLoading(false)
-    }
-  }, [user?.outletId])
-
-  // Search products using inventory API with local filtering
-  const searchProducts = React.useCallback(async (term: string) => {
-    if (!user?.outletId || term.length < 3) return
-    
-    try {
-      setLoading(true)
-      setError(null)
-      
-      console.log('Mobile searching products for outlet:', user.outletId, 'term:', term)
-      const productsData = await apiClient.inventory.getItems(user.outletId)
-      
-      console.log('Mobile Search Inventory API Response:', productsData)
-      
-      // If no products found for specific outlet, try loading all products
-      let finalProducts = productsData
-      if (!productsData || productsData.length === 0) {
-        console.log('No products found for outlet, trying all products...')
-        finalProducts = await apiClient.inventory.getItems()
-      }
-      
-      // Filter products locally based on search term
-      const filteredProducts = (finalProducts || []).filter((product: any) => {
-        const searchFields = [
-          product.name,
-          product.sku,
-          product.barcode,
-          product.genericName,
-          product.description,
-          product.category
-        ].filter(Boolean).join(' ').toLowerCase()
-        
-        return searchFields.includes(term.toLowerCase())
-      })
-      
-      // Filter out any invalid products and add defaults
-      const validProducts = filteredProducts.filter((product: any) => {
-        if (!product || typeof product !== 'object') {
-          console.warn('Invalid mobile search product:', product)
-          return false
-        }
-        if (!product.id || !product.name) {
-          console.warn('Mobile search product missing required fields:', product)
-          return false
-        }
-        return true
-      }).map((product: any) => ({
-        ...product,
-        id: product.id,
-        price: product.sellingPrice || product.price || 0,
-        unit: product.unitOfMeasure || product.unit || 'unit',
-        category: product.category || 'Unknown',
-        currentStock: product.stockQuantity || 0,
-        stockQuantity: product.stockQuantity || 0,
-        reorderLevel: product.reorderLevel || 0,
-        minimumStock: product.reorderLevel || 0
-      }))
-      
-      console.log('Valid mobile search products:', validProducts)
-      setProducts(validProducts)
-    } catch (err) {
-      console.error('Failed to search mobile products:', err)
-      setError('Failed to search products')
-      setProducts([])
-    } finally {
-      setLoading(false)
-    }
-  }, [user?.outletId])
-
-  // Load products on mount
-  React.useEffect(() => {
-    loadProducts()
-  }, [loadProducts])
-
-  // Handle search with debouncing
-  React.useEffect(() => {
-    if (searchTerm.length >= 3) {
-      const timeoutId = setTimeout(() => {
-        searchProducts(searchTerm)
-      }, 300)
-      return () => clearTimeout(timeoutId)
-    } else if (searchTerm.length === 0) {
-      loadProducts()
-    }
-  }, [searchTerm, searchProducts, loadProducts])
-
   const handleAddToCart = (product: any) => {
-    try {
-      const stockValue = product.currentStock || product.stockQuantity || 0
-      console.log('Mobile adding product to cart:', {
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        stock: stockValue,
-        currentStock: product.currentStock,
-        stockQuantity: product.stockQuantity,
-        allFields: product
-      })
-      
-      onAddToCart({
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        unit: product.unit,
-        stock: stockValue,
-        batchNumber: product.sku || product.barcode,
-        expiryDate: "2025-12-31",
-        category: product.category,
-      })
-      showSuccessToast(`${product.name} added to cart`)
-    } catch (error) {
-      showErrorToast("Failed to add product to cart")
+    const cartItem: Omit<CartItem, "quantity"> = {
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      unit: product.unit,
+      stock: product.currentStock || product.stockQuantity || 0,
+      batchNumber: product.batchNumber,
+      expiryDate: product.expiryDate,
+      category: product.category,
     }
+    
+    onAddToCart(cartItem)
+    showSuccessToast(`Added ${product.name} to cart`)
   }
 
   // Handle barcode scan results
@@ -233,8 +129,20 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
     const result = await handleScan(barcode)
     
     if (result.success && result.product) {
-      handleAddToCart(result.product)
-      showSuccessToast(`Scanned: ${result.product.name}`)
+      const product = result.product as any
+      const cartItem: Omit<CartItem, "quantity"> = {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        unit: product.unit || 'unit',
+        stock: product.currentStock || product.stockQuantity || 0,
+        batchNumber: product.sku || product.barcode,
+        expiryDate: "2025-12-31",
+        category: product.category,
+      }
+      
+      onAddToCart(cartItem)
+      showSuccessToast(`Scanned: ${product.name}`)
       stopScanning()
     } else {
       showErrorToast(result.error || 'Product not found')
@@ -246,190 +154,176 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
     startScanning()
   }
 
-  // Render loading state
+  const isLowStock = (stock: number, reorderLevel: number) => stock <= reorderLevel
+
+  const getStockInfo = (product: ProductWithStock) => {
+    const stock = product.currentStock || product.stockQuantity || 0
+    const reorderLevel = product.reorderLevel || product.minimumStock || 0
+    const isLow = isLowStock(stock, reorderLevel)
+    
+    return {
+      stock,
+      reorderLevel,
+      isLow,
+      status: isLow ? 'low' : stock === 0 ? 'out' : 'good'
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'low': return 'bg-yellow-100 text-yellow-800'
+      case 'out': return 'bg-red-100 text-red-800'
+      default: return 'bg-green-100 text-green-800'
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'low': return 'Low Stock'
+      case 'out': return 'Out of Stock'
+      default: return 'In Stock'
+    }
+  }
+
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="flex space-x-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <div className="h-10 bg-muted animate-pulse rounded-md" />
-          </div>
-          <div className="h-10 w-10 bg-muted animate-pulse rounded-md" />
-          <div className="h-10 w-10 bg-muted animate-pulse rounded-md" />
-        </div>
-        <div className="flex items-center justify-center py-8">
-          <LoadingSpinner text="Loading products..." />
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner />
       </div>
     )
   }
 
-  // Calculate displayProducts - limit to 20 on mobile
-  const displayProducts = products?.slice(0, 20) || []
+  if (error) {
+    return (
+      <div className="text-center text-red-600 p-4">
+        <p>Failed to load products: {String(error)}</p>
+        <Button onClick={() => window.location.reload()} className="mt-2">
+          Retry
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
-      {/* Mobile Search Header */}
-      <div className="flex space-x-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search products..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 h-12 text-base"
-          />
+      {/* Search and Controls */}
+      <div className="space-y-3">
+        <div className="flex gap-2">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search products..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleStartScanning}
+            disabled={scannerLoading}
+          >
+            <Scan className="h-4 w-4" />
+          </Button>
         </div>
-        <Button 
-          variant="outline" 
-          size="icon"
-          onClick={handleStartScanning}
-          disabled={scannerLoading}
-          className="h-12 w-12"
-        >
-          <Scan className="h-5 w-5" />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-          className="h-12 w-12"
-        >
-          <Grid3x3 className="h-5 w-5" />
-        </Button>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+            >
+              <Grid3x3 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+            >
+              <Package className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          <div className="text-sm text-gray-500">
+            {filteredProducts.length} products
+          </div>
+        </div>
       </div>
 
-      {/* Products Display */}
-      {viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 gap-3">
-          {displayProducts && displayProducts.length > 0 ? (
-            displayProducts.map((product: ProductWithStock) => {
-              const stock = product.currentStock || product.stockQuantity || 0
-              const isOutOfStock = stock === 0
-              const isLowStock = stock > 0 && stock <= (product.reorderLevel || 10)
-              
-              return (
-                <Card key={product.id} className="relative">
-                  <CardContent className="p-3">
-                    <div className="space-y-2">
-                      <div>
-                        <h4 className="font-medium text-sm line-clamp-2 leading-tight">
-                          {product.name}
-                        </h4>
-                        <p className="text-xs text-muted-foreground">
-                          {product.category}
-                        </p>
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold text-sm">
-                            Le {product.price.toLocaleString('en-SL')}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Stock: {stock}
-                          </p>
-                        </div>
-                        
-                        <Button
-                          size="sm"
-                          onClick={() => handleAddToCart(product)}
-                          disabled={isOutOfStock}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      
-                      {/* Status badges */}
-                      <div className="flex flex-wrap gap-1">
-                        {isOutOfStock && (
-                          <Badge variant="destructive" className="text-xs">
-                            Out
-                          </Badge>
-                        )}
-                        {isLowStock && (
-                          <Badge variant="secondary" className="text-xs">
-                            Low
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })
-          ) : (
-            <div className="col-span-2 text-center py-8 text-muted-foreground">
-              <Package className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>{searchTerm ? "No products found" : "No products available"}</p>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {displayProducts && displayProducts.length > 0 ? (
-            displayProducts.map((product: ProductWithStock) => {
-              const stock = product.currentStock || product.stockQuantity || 0
-              const isOutOfStock = stock === 0
-              const isLowStock = stock > 0 && stock <= (product.reorderLevel || 10)
-              
-              return (
-                <Card key={product.id}>
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 mr-3">
-                        <h4 className="font-medium text-sm">{product.name}</h4>
-                        <p className="text-xs text-muted-foreground mb-1">
-                          {product.category} • Stock: {stock}
-                        </p>
-                        <div className="flex items-center space-x-2">
-                          <p className="font-semibold text-sm">
-                            Le {product.price.toLocaleString('en-SL')}
-                          </p>
-                          {isOutOfStock && (
-                            <Badge variant="destructive" className="text-xs">
-                              Out
-                            </Badge>
-                          )}
-                          {isLowStock && (
-                            <Badge variant="secondary" className="text-xs">
-                              Low
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <Button
-                        size="sm"
-                        onClick={() => handleAddToCart(product)}
-                        disabled={isOutOfStock}
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <Package className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>{searchTerm ? "No products found" : "No products available"}</p>
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* Barcode Scanner Modal */}
+      {/* Barcode Scanner */}
       {isScanning && (
         <BarcodeScanner
           isOpen={isScanning}
           onScan={handleBarcodeScanned}
           onClose={stopScanning}
         />
+      )}
+
+      {/* Products Grid/List */}
+      {filteredProducts.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          {searchTerm ? 'No products found matching your search' : 'No products available'}
+        </div>
+      ) : (
+        <div className={viewMode === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-2'}>
+          {filteredProducts.map((product) => {
+            const stockInfo = getStockInfo(product)
+            const isInCart = cartItems.some(item => item.id === product.id)
+            
+            return (
+              <Card key={product.id} className="overflow-hidden">
+                <CardContent className="p-3">
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-sm truncate">
+                          {product.name}
+                        </h3>
+                        <p className="text-xs text-gray-500 truncate">
+                          {product.category}
+                        </p>
+                      </div>
+                      <Badge 
+                        variant="secondary" 
+                        className={getStatusColor(stockInfo.status)}
+                      >
+                        {getStatusText(stockInfo.status)}
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-green-600">
+                          Le {product.price.toLocaleString('en-SL')}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Stock: {stockInfo.stock}
+                        </p>
+                      </div>
+                      
+                      <Button
+                        size="sm"
+                        onClick={() => handleAddToCart(product)}
+                        disabled={stockInfo.stock === 0 || isInCart}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    {isInCart && (
+                      <div className="text-xs text-blue-600 font-medium">
+                        In Cart
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
       )}
     </div>
   )

@@ -78,10 +78,8 @@ export function ShiftProvider({ children }: { children: React.ReactNode }) {
         throw new Error('User or outlet information not available')
       }
       
-      const newShift = await apiClient.shifts.start({ 
-        openingBalance,
-        cashierId: user.id,
-        outletId: user.outletId
+      const newShift = await apiClient.shifts.start({
+        openingBalance
       })
       setCurrentShift(newShift)
       

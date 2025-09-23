@@ -72,29 +72,34 @@ import { useState, useCallback, useMemo } from 'react'
 import { useApi, useMutation } from './use-api'
 import { apiClient } from '@/lib/api-unified'
 import { dataTransforms, dataValidations } from '@/lib/data-utils'
+import { getOutletId } from '@/lib/user-utils'
+import { useAuth } from '@/contexts/auth-context'
 
 // Combined dashboard data hook
 export function useDashboardData(outletId?: string) {
+  const { user } = useAuth()
+  const resolvedOutletId = outletId || getOutletId(user)
+  
   const { data: todaysSales, loading: salesLoading, error: salesError } = useApi(
-    () => apiClient.sales.getDailySummary(outletId),
+    () => apiClient.sales.getDailySummary(resolvedOutletId),
     {
-      cacheKey: `dashboard-sales-${outletId || 'all'}`,
+      cacheKey: `dashboard-sales-${resolvedOutletId || 'all'}`,
       cacheDuration: 30 * 1000, // 30 seconds
     }
   )
 
   const { data: inventoryStats, loading: inventoryLoading, error: inventoryError } = useApi(
-    () => apiClient.inventory.getStats(outletId),
+    () => apiClient.inventory.getStats(resolvedOutletId),
     {
-      cacheKey: `dashboard-inventory-${outletId || 'all'}`,
+      cacheKey: `dashboard-inventory-${resolvedOutletId || 'all'}`,
       cacheDuration: 2 * 60 * 1000, // 2 minutes
     }
   )
 
   const { data: lowStockProducts, loading: lowStockLoading, error: lowStockError } = useApi(
-    () => apiClient.products.getLowStock(outletId),
+    () => apiClient.products.getLowStock(resolvedOutletId),
     {
-      cacheKey: `dashboard-low-stock-${outletId || 'all'}`,
+      cacheKey: `dashboard-low-stock-${resolvedOutletId || 'all'}`,
       cacheDuration: 1 * 60 * 1000, // 1 minute
     }
   )
