@@ -251,7 +251,7 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
           </div>
         </div>
       </div>
-
+//fixes to do and push
       {/* Barcode Scanner */}
       {isScanning && (
         <BarcodeScanner
