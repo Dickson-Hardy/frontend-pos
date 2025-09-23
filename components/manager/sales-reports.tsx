@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Download } from "lucide-react"
+import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Download, Calculator, Percent } from "lucide-react"
 import { formatSLL } from "@/lib/currency-utils"
 import { useSales, useDailySummary } from "@/hooks/use-sales"
 
@@ -102,6 +102,60 @@ export function SalesReports() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Profit/Loss Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-foreground">Profit & Loss Analysis</h2>
+        <div className="grid md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Revenue</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    Le {salesStats?.totalSales?.toLocaleString('en-SL') || '0'}
+                  </p>
+                </div>
+                <DollarSign className="h-8 w-8 text-green-600" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Cost</p>
+                  <p className="text-2xl font-bold text-red-600">
+                    Le {salesStats?.totalCost?.toLocaleString('en-SL') || '0'}
+                  </p>
+                </div>
+                <Calculator className="h-8 w-8 text-red-600" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Net Profit</p>
+                  <p className={`text-2xl font-bold ${(salesStats?.totalProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    Le {salesStats?.totalProfit?.toLocaleString('en-SL') || '0'}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <Percent className="h-3 w-3" />
+                    <span className={`text-xs ${(salesStats?.profitMargin || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {salesStats?.profitMargin?.toFixed(1) || '0'}% margin
+                    </span>
+                  </div>
+                </div>
+                <TrendingUp className={`h-8 w-8 ${(salesStats?.totalProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

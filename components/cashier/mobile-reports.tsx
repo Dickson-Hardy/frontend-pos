@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { 
   BarChart3, 
   Clock, 
-  DollarSign, 
+  Banknote, 
   TrendingUp, 
   TrendingDown,
   Calendar,

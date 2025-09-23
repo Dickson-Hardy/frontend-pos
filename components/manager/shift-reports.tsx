@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Clock, DollarSign, Users, Download, Eye, FileText, TrendingUp, TrendingDown, Calendar, Filter } from "lucide-react"
+import { Clock, Banknote, Users, Download, Eye, FileText, TrendingUp, TrendingDown, Calendar, Filter } from "lucide-react"
 import { formatSLL } from "@/lib/currency-utils"
 import { apiClient, Shift } from "@/lib/api-unified"
 import { useAuth } from "@/contexts/auth-context"
@@ -216,7 +216,7 @@ export function ShiftReports() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-purple-600" />
+              <Banknote className="h-5 w-5 text-purple-600" />
               <div>
                 <p className="text-sm text-muted-foreground">Net Amount</p>
                 <p className="text-2xl font-bold">Le {stats.netAmount.toLocaleString('en-SL')}</p>

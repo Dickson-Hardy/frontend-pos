@@ -15,7 +15,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { 
   Clock,
   Users,
-  DollarSign,
   Calculator,
   CheckCircle,
   AlertTriangle,
@@ -423,7 +422,7 @@ export function ShiftReconciliation() {
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-blue-50 p-4 rounded-lg text-center">
-                      <DollarSign className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                      <Banknote className="h-8 w-8 text-blue-600 mx-auto mb-2" />
                       <p className="text-sm font-medium text-blue-600">Total Sales</p>
                       <p className="text-2xl font-bold text-blue-900">
                         {formatSLL(currentShift.totalSales)}
@@ -667,7 +666,7 @@ export function ShiftReconciliation() {
                                 <p className="text-sm">{issue.description}</p>
                               </div>
                               {issue.amount && (
-                                <span className="font-semibold">${issue.amount.toFixed(2)}</span>
+                                <span className="font-semibold">Le {issue.amount.toFixed(2)}</span>
                               )}
                             </div>
                           </div>
@@ -715,17 +714,17 @@ export function ShiftReconciliation() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span>Expected Total:</span>
-                        <span className="font-medium">${handover.expectedTotal.toFixed(2)}</span>
+                        <span className="font-medium">Le {handover.expectedTotal.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Counted Total:</span>
-                        <span className="font-medium">${handover.countedTotal.toFixed(2)}</span>
+                        <span className="font-medium">Le {handover.countedTotal.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Variance:</span>
                         <span className={`font-medium ${handover.variance === 0 ? 'text-gray-900' : 
                           handover.variance > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          ${handover.variance.toFixed(2)}
+                          Le {handover.variance.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -740,7 +739,7 @@ export function ShiftReconciliation() {
                         {handover.issues.map((issue, index) => (
                           <div key={index} className="flex justify-between">
                             <span>{ISSUE_TYPES.find(t => t.value === issue.type)?.label}:</span>
-                            <span>{issue.amount ? `$${issue.amount.toFixed(2)}` : '—'}</span>
+                            <span>{issue.amount ? `Le ${issue.amount.toFixed(2)}` : '—'}</span>
                           </div>
                         ))}
                       </div>

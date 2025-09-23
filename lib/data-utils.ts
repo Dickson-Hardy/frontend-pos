@@ -3,11 +3,8 @@ import { Product, Sale, SaleItem, InventoryItem, User, PackVariant, SalePackInfo
 // Data transformation utilities
 export const dataTransforms = {
   // Product transformations
-  formatPrice: (price: number, currency = 'USD'): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-    }).format(price)
+  formatPrice: (price: number, currency = 'Le'): string => {
+    return `${currency} ${price.toLocaleString('en-SL')}`
   },
 
   formatProductName: (product: Product): string => {
@@ -461,6 +458,29 @@ export const dataAggregations = {
   // Sales aggregations
   calculateTotalSales: (sales: Sale[]): number => {
     return sales.reduce((total, sale) => total + sale.total, 0)
+  },
+
+  calculateTotalCost: (sales: Sale[]): number => {
+    return sales.reduce((total, sale) => {
+      const saleCost = sale.items.reduce((itemTotal, item) => {
+        const productCost = item.product?.cost || 0
+        return itemTotal + (productCost * item.quantity)
+      }, 0)
+      return total + saleCost
+    }, 0)
+  },
+
+  calculateTotalProfit: (sales: Sale[]): number => {
+    const totalRevenue = dataAggregations.calculateTotalSales(sales)
+    const totalCost = dataAggregations.calculateTotalCost(sales)
+    return totalRevenue - totalCost
+  },
+
+  calculateProfitMargin: (sales: Sale[]): number => {
+    const totalRevenue = dataAggregations.calculateTotalSales(sales)
+    const totalCost = dataAggregations.calculateTotalCost(sales)
+    if (totalRevenue === 0) return 0
+    return ((totalRevenue - totalCost) / totalRevenue) * 100
   },
 
   calculateAverageTransaction: (sales: Sale[]): number => {

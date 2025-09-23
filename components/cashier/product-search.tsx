@@ -65,19 +65,8 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
       console.log('Inventory API Response:', response)
       console.log('Response length:', response?.length)
       
-      // If no products found for outlet, try loading all products
-      let productsToProcess = response
-      if (!response || response.length === 0) {
-        console.log('No products found for outlet, trying to load all products...')
-        try {
-          const allProductsResponse = await apiClient.inventory.getItems()
-          console.log('All products response:', allProductsResponse)
-          productsToProcess = allProductsResponse || []
-        } catch (fallbackError) {
-          console.error('Fallback also failed:', fallbackError)
-          productsToProcess = []
-        }
-      }
+      // Use only outlet-specific products - no fallback to all products
+      const productsToProcess = response || []
       
       // Filter out any invalid products and add defaults
       const validProducts = productsToProcess.filter((product: any) => {

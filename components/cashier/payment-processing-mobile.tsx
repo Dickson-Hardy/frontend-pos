@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { CreditCard, Smartphone, DollarSign, Receipt, ArrowLeft, Check } from "lucide-react"
+import { CreditCard, Smartphone, Receipt, ArrowLeft, Check, Banknote } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { useSaleMutations } from "@/hooks/use-sales"
 import { useAuth } from "@/contexts/auth-context"
+import { useShift } from "@/contexts/shift-context"
 import type { CartItem } from "@/app/cashier/page"
 import type { PaymentMethod } from "@/lib/api-unified"
 
@@ -45,6 +46,7 @@ export function PaymentProcessingMobile({
 }: PaymentProcessingMobileProps) {
   const { user } = useAuth()
   const { createSale } = useSaleMutations()
+  const { currentShift } = useShift()
   const [paymentMethod, setPaymentMethod] = useState<MobilePaymentMethod>("cash")
   const [cashReceived, setCashReceived] = useState("")
   const [cardAmount, setCardAmount] = useState("")
@@ -65,6 +67,11 @@ export function PaymentProcessingMobile({
   const mixedShortfall = paymentMethod === "mixed" ? Math.max(0, total - mixedTotalPaid) : 0
 
   const isPaymentValid = () => {
+    // First check if shift is active
+    if (!currentShift) {
+      return false
+    }
+    
     const valid = (() => {
       switch (paymentMethod) {
         case "cash":
@@ -87,7 +94,8 @@ export function PaymentProcessingMobile({
       total,
       mobileNumber: mobileNumber.trim(),
       mixedShortfall,
-      mixedTotalPaid
+      mixedTotalPaid,
+      hasActiveShift: !!currentShift
     })
     
     return valid
@@ -357,7 +365,7 @@ export function PaymentProcessingMobile({
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="cash" id="cash" />
               <Label htmlFor="cash" className="flex items-center space-x-2 cursor-pointer">
-                <DollarSign className="h-4 w-4" />
+                <Banknote className="h-4 w-4" />
                 <span>Cash</span>
               </Label>
             </div>
@@ -513,6 +521,15 @@ export function PaymentProcessingMobile({
         </CardContent>
       </Card>
 
+      {/* Shift Warning */}
+      {!currentShift && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
+          <p className="text-orange-700 text-sm font-medium text-center">
+            ⚠️ You must start a shift before processing sales
+          </p>
+        </div>
+      )}
+
       {/* Process Payment Button */}
       <Button
         onClick={handlePayment}
@@ -528,7 +545,7 @@ export function PaymentProcessingMobile({
         ) : (
           <div className="flex items-center space-x-2">
             <Check className="h-5 w-5" />
-            <span>Process Payment</span>
+            <span>{!currentShift ? 'Start Shift Required' : 'Process Payment'}</span>
           </div>
         )}
       </Button>

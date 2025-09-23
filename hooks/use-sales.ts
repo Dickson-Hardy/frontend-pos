@@ -11,12 +11,24 @@ export function useSales(filters?: SaleFilters, options?: { paginated?: boolean;
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [cashierFilter, setCashierFilter] = useState<string>('')
 
-  const combinedFilters = useMemo(() => ({
-    ...filters,
-    ...dateRange,
-    ...(statusFilter && { status: statusFilter as any }),
-    ...(cashierFilter && { cashierId: cashierFilter }),
-  }), [filters, dateRange, statusFilter, cashierFilter])
+  const combinedFilters = useMemo(() => {
+    const filterParams: any = {
+      ...filters,
+      ...dateRange,
+    }
+    
+    // Only add status if it's not empty
+    if (statusFilter && statusFilter.trim() !== '') {
+      filterParams.status = statusFilter as any
+    }
+    
+    // Only add cashierId if it's not empty
+    if (cashierFilter && cashierFilter.trim() !== '') {
+      filterParams.cashierId = cashierFilter
+    }
+    
+    return filterParams
+  }, [filters, dateRange, statusFilter, cashierFilter])
 
   // Use paginated hook if requested
   if (paginated) {
@@ -47,8 +59,16 @@ export function useSales(filters?: SaleFilters, options?: { paginated?: boolean;
   const salesStats = useMemo(() => {
     if (!sales || !Array.isArray(sales)) return null
 
+    const totalRevenue = dataAggregations.calculateTotalSales(sales)
+    const totalCost = dataAggregations.calculateTotalCost(sales)
+    const totalProfit = dataAggregations.calculateTotalProfit(sales)
+    const profitMargin = dataAggregations.calculateProfitMargin(sales)
+
     return {
-      totalSales: dataAggregations.calculateTotalSales(sales),
+      totalSales: totalRevenue,
+      totalCost,
+      totalProfit,
+      profitMargin,
       totalTransactions: sales.length,
       averageTransaction: dataAggregations.calculateAverageTransaction(sales),
       topProducts: dataAggregations.getTopSellingProducts(sales, 5),

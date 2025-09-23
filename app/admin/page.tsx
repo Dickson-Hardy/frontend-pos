@@ -60,15 +60,23 @@ function AdminPage() {
 
   useEffect(() => {
     if (!user) return
-    if (selectedOutletId === 'all') {
-      updateUser({ ...user, outletId: undefined as any, outlet: undefined as any })
-    } else if (selectedOutletId !== user.outletId) {
-      updateUser({ ...user, outletId: selectedOutletId, outlet: outlets.find(o => o.id === selectedOutletId) as any })
+    
+    // Only update if the outlet actually changed
+    const currentOutletId = user.outletId
+    const newOutletId = selectedOutletId === 'all' ? undefined : selectedOutletId
+    
+    if (currentOutletId !== newOutletId) {
+      if (selectedOutletId === 'all') {
+        updateUser({ ...user, outletId: undefined as any, outlet: undefined as any })
+      } else {
+        updateUser({ ...user, outletId: selectedOutletId, outlet: outlets.find(o => o.id === selectedOutletId) as any })
+      }
     }
+    
     if (typeof window !== 'undefined') {
       localStorage.setItem('selected_outlet_id', selectedOutletId)
     }
-  }, [selectedOutletId, user, outlets, updateUser])
+  }, [selectedOutletId, user, outlets])
 
   const renderContent = () => {
     switch (activeView) {

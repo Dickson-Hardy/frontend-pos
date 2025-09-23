@@ -70,12 +70,8 @@ export function ProductSearchMobile({ onAddToCart, cartItems = [] }: ProductSear
       
       console.log('Mobile Inventory API Response:', productsData)
       
-      // If no products found for specific outlet, try loading all products
-      let finalProducts = productsData
-      if (!productsData || productsData.length === 0) {
-        console.log('No products found for outlet, trying all products...')
-        finalProducts = await apiClient.inventory.getItems()
-      }
+      // Use only outlet-specific products - no fallback to all products
+      const finalProducts = productsData || []
       
       // Filter out any invalid products and add defaults
       const validProducts = (finalProducts || []).filter((product: any) => {

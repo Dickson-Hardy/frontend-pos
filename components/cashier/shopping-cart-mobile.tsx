@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { useInventory } from "@/hooks/use-inventory"
 import { useAuth } from "@/contexts/auth-context"
+import { useShift } from "@/contexts/shift-context"
 import type { CartItem } from "@/app/cashier/page"
 
 interface ShoppingCartMobileProps {
@@ -34,6 +35,7 @@ export function ShoppingCartMobile({
   // All hooks must be called at the top level - never conditionally
   const { user } = useAuth()
   const { items: inventoryItems } = useInventory(user?.outletId)
+  const { currentShift } = useShift()
 
   // Function to get current stock for a product
   const getCurrentStock = (productId: string) => {
@@ -234,14 +236,22 @@ export function ShoppingCartMobile({
               </div>
             )}
             
+            {!currentShift && (
+              <div className="bg-orange-50 border border-orange-200 rounded p-2">
+                <p className="text-xs text-orange-700 text-center">
+                  ⚠️ You must start a shift before processing sales
+                </p>
+              </div>
+            )}
+            
             <Button 
               onClick={onProceedToPayment} 
               className="w-full h-12 text-base font-semibold" 
               size="lg" 
-              disabled={items.length === 0 || hasStockIssues()}
+              disabled={items.length === 0 || hasStockIssues() || !currentShift}
             >
               <CreditCard className="mr-2 h-5 w-5" />
-              Proceed to Payment
+              {!currentShift ? 'Start Shift Required' : 'Proceed to Payment'}
             </Button>
           </div>
         </CardContent>
